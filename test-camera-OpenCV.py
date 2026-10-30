@@ -16,7 +16,13 @@ try:
         frame = picam2.capture_array()
         cv2.imshow("Camera", frame)
 
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        key = cv2.waitKey(1) & 0xFF 
+
+        if key == ord("s"):
+            cv2.imwrite("imagen_prueba", frame)
+            print("Imagen guardada como 'imagen_prueba'")
+
+        if key == ord("q"):
             break
 finally:
     picam2.stop()
