@@ -4,7 +4,7 @@ from picamera2 import Picamera2
 #camera = cv2.VideoCapture(0)
 
 picam2 = Picamera2()
-picam2.configure(picam2.create_still_configuration(main={"size": (640, 480)}))
+picam2.configure(picam2.create_still_configuration(main={"size": (1640, 1232)}))
 picam2.start()
 
 if not picam2:
