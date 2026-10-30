@@ -1,3 +1,4 @@
+import time
 from vilib import Vilib
 from time import sleep
 import os
