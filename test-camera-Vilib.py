@@ -1,5 +1,6 @@
 from vilib import Vilib
 from time import sleep
+import os
 
 # Start camera
 
