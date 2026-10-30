@@ -21,9 +21,10 @@ while True:
     frame = Vilib.img
 
     if frame is not None:
-        if input() == "q":
+        comando = input("s: guardar | q: salir: ")
+        if comando() == "q":
             break
-        if input() == "s":
+        if comando() == "s":
             _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
             status = Vilib.take_photo(str(_time),path)
 
