@@ -21,7 +21,7 @@ try:
         key = cv2.waitKey(1) & 0xFF 
 
         if key == ord("s"):
-            cv2.imwrite("imagen_prueba", frame)
+            cv2.imwrite("imagen_prueba.jpg", frame)
             print("Imagen guardada como 'imagen_prueba'")
 
         if key == ord("q"):
