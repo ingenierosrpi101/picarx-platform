@@ -1,5 +1,3 @@
-import cv2
-import numpy as np
 from vilib import Vilib
 from time import sleep
 
@@ -11,6 +9,11 @@ Vilib.camera_start()
 
 Vilib.display(local = False, web = True)
 
+# Set path
+
+path = f"/home/{user_name}/picarx-platform"
+
+
 while True:
     frame = Vilib.img
 
@@ -18,8 +21,13 @@ while True:
         if input() == "q":
             break
         if input() == "s":
-            cv2.imwrite("imagen_prueba_vilib.jpg", frame)
-            print("Imagen guardada como 'imagen_prueba_vilib'")    
+            _time = time.strftime("%y-%m-%d_%H-%M-%S", time.localtime())
+            status = Vilib.take_photo(str(_time),path)
+
+            if status:
+                print("Imagen guardada como 'imagen_prueba_vilib'")
+            else:
+                print("Error: No se pudo guardar la imagen")    
     else:
         print("Error: No se pudo leer el frame de la cámara")
             
