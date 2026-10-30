@@ -1,3 +1,5 @@
+import cv2
+import numpy as np
 from vilib import Vilib
 from time import sleep
 
