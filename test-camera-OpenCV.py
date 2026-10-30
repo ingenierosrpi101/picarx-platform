@@ -11,12 +11,12 @@ if not picam2:
     print("Camera not available")
     exit()
 
+print("Presiona 's' para guardar la imagen o 'q' para salir del programa.")    
+
 try:
     while True:
         frame = picam2.capture_array()
         cv2.imshow("Camera", frame)
-
-        print("Presiona 's' para guardar la imagen o 'q' para salir del programa.")
 
         key = cv2.waitKey(1) & 0xFF 
 
