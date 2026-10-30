@@ -15,6 +15,14 @@ while True:
     frame = Vilib.img
 
     if frame is not None:
-        # Frame is a NumPy / OpenCV image
-        #print(frame.shape)
+        if input() == "q":
+            break
+        if input() == "s":
+            cv2.imwrite("imagen_prueba_vilib.jpg", frame)
+            print("Imagen guardada como 'imagen_prueba_vilib'")    
+    else:
+        print("Error: No se pudo leer el frame de la cámara")
+            
     sleep(0.1)   
+
+Vilib.camera_close()
