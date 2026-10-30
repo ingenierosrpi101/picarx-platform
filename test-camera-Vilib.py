@@ -10,8 +10,9 @@ Vilib.camera_start()
 
 Vilib.display(local = False, web = True)
 
-# Set path
+# Set path and user name
 
+user_name = os.getlogin()
 path = f"/home/{user_name}/picarx-platform"
 
 
