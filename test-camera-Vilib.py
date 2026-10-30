@@ -16,6 +16,5 @@ while True:
 
     if frame is not None:
         # Frame is a NumPy / OpenCV image
-        print(frame.shape)
-
-    sleep(0.1)    
+        #print(frame.shape)
+    sleep(0.1)   
