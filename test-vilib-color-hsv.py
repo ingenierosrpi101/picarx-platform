@@ -171,7 +171,7 @@ while True:
             else:
                 decision = "Centro"
 
-            print(f"Centroide: {x} | Error: {error}")
+            #print(f"Centroide: {x} | Error: {error}")
 
             cv2.circle(frame, (x, y), 7, (0, 255, 0), -1)
 
