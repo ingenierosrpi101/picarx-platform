@@ -104,41 +104,100 @@ while True:
     frame_vilib = Vilib.img
 
     if frame_vilib is None:
-        break
+        continue
 
     frame = frame_vilib.copy()
 
-    frame_HSV = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    frame_threshold = cv2.inRange(frame_HSV, (low_H, low_S, low_V), (high_H, high_S, high_V))
-    ## [while]
-    contornos, _ = cv2.findContours(frame_threshold, cv2.RETR_EXTERNAL,
-      cv2.CHAIN_APPROX_SIMPLE)
-    #cv2.drawContours(frame, contornos, -1, (255,0,0), 3)
-    #print(len(contornos))
-    #cv2.drawContours(frame, contornos, -1, (255,0,0), 3)
-    for c in contornos:
-      area = cv2.contourArea(c)
-      if area > 3000:
-        M = cv2.moments(c)
-        #print(M)
-        if (M["m00"]==0): M["m00"]=1
-        x = int(M["m10"]/M["m00"])
-        y = int(M['m01']/M['m00'])
-        cv2.circle(frame, (x,y), 7, (0,255,0), -1)
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(frame, '{},{}'.format(x,y),(x+10,y), font, 0.75,(0,255,0),1,cv2.LINE_AA)
-        nuevoContorno = cv2.convexHull(c)
-        cv2.drawContours(frame, [nuevoContorno], 0, (255,0,0), 3)
-       
+    height, width = frame.shape[:2]
 
-    ## [show]
+    # Definir la región de interés (ROI)
+    x1 = int(width * 0.15)
+    x2 = int(width * 0.85)
+
+    y1 = int(height * 0.65)
+    y2 = int(height * 0.85)
+
+    roi = frame[y1:y2, x1:x2]
+
+    # Procesar la ROI mediante HSV
+    frame_HSV = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+
+    frame_threshold = cv2.inRange(
+        frame_HSV,
+        (low_H, low_S, low_V),
+        (high_H, high_S, high_V)
+    )
+
+    # Detectar contornos
+    contornos, _ = cv2.findContours(
+        frame_threshold,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    for c in contornos:
+
+        area = cv2.contourArea(c)
+
+        if area > 3000:
+
+            M = cv2.moments(c)
+
+            if M["m00"] == 0:
+                continue
+
+            # Coordenadas del centroide en la imagen original
+            x = int(M["m10"] / M["m00"]) + x1
+            y = int(M["m01"] / M["m00"]) + y1
+
+            cv2.circle(frame, (x, y), 7, (0, 255, 0), -1)
+
+            font = cv2.FONT_HERSHEY_SIMPLEX
+
+            cv2.putText(
+                frame,
+                f"{x},{y}",
+                (x + 10, y),
+                font,
+                0.75,
+                (0, 255, 0),
+                1,
+                cv2.LINE_AA
+            )
+
+            # Dibujar contorno en coordenadas originales
+            nuevoContorno = cv2.convexHull(c)
+
+            nuevoContorno[:, :, 0] += x1
+            nuevoContorno[:, :, 1] += y1
+
+            cv2.drawContours(
+                frame,
+                [nuevoContorno],
+                0,
+                (255, 0, 0),
+                3
+            )
+
+    # Dibujar los límites de la ROI
+    cv2.rectangle(
+        frame,
+        (x1, y1),
+        (x2, y2),
+        (0, 255, 255),
+        2
+    )
+
+    # Mostrar resultados
     cv2.imshow(window_capture_name, frame)
     cv2.imshow(window_detection_name, frame_threshold)
-    ## [show]
 
-    key = cv2.waitKey(30)
+    key = cv2.waitKey(30) & 0xFF
+
     if key == ord('q') or key == 27:
         break
 
+cv2.destroyAllWindows()
+Vilib.camera_close()
 
 
