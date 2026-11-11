@@ -40,7 +40,9 @@ if __name__ == "__main__":
                 break
 
             frame = frame_vilib.copy()
-        
+
+            cv2.imshow("Camera", frame)
+
 
             # Primero: atender las teclas.
             if key == ord("q"):
@@ -72,7 +74,6 @@ if __name__ == "__main__":
                     px.forward(20)
                     print("AVANCE: El carro avanzará hasta que se presione 's' o 'd'.")
 
-        cv2.imshow("Camera", frame)
 
             
     finally:   
