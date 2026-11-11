@@ -114,7 +114,7 @@ while True:
     x1 = int(width * 0.15)
     x2 = int(width * 0.85)
 
-    y1 = int(height * 0.65)
+    y1 = int(height * 0.25)
     y2 = int(height * 0.85)
 
     roi = frame[y1:y2, x1:x2]
