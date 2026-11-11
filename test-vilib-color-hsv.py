@@ -2,6 +2,7 @@ import cv2
 from vilib import Vilib
 import argparse
 import os
+import time
 #cambiar a path 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -99,6 +100,10 @@ cv2.createTrackbar(low_V_name, window_detection_name , low_V, max_value, on_low_
 cv2.createTrackbar(high_V_name, window_detection_name , high_V, max_value, on_high_V_thresh_trackbar)
 ## [trackbar]
 
+inicio_fps = time.monotonic()
+contador_fps = 0
+fps = 0.0
+
 while True:
 
     frame_vilib = Vilib.img
@@ -193,6 +198,8 @@ while True:
                 2
             )
 
+
+
             # Dibujar contorno en coordenadas originales
             nuevoContorno = cv2.convexHull(c)
 
@@ -213,6 +220,27 @@ while True:
         (x1, y1),
         (x2, y2),
         (0, 255, 255),
+        2
+    )
+
+    contador_frames += 1
+    ahora = time.monotonic()
+    transcurrido = ahora - inicio_fps
+
+    if transcurrido >= 1:
+        fps = contador_frames / transcurrido
+
+        # Reiniciar la cuenta para el siguiente intervalo.
+        contador_frames = 0
+        inicio_fps = ahora
+
+    cv2.putText(
+        frame,
+        f"FPS: {fps:.1f}",
+        (20, 80),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (0, 255, 0),
         2
     )
 
