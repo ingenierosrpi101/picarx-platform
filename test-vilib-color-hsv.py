@@ -150,6 +150,14 @@ while True:
             x = int(M["m10"] / M["m00"]) + x1
             y = int(M["m01"] / M["m00"]) + y1
 
+            # Calcular el centro horizontal de la imagen
+            centro_imagen = width // 2
+
+            # Calcular el error de posición
+            error = x - centro_imagen
+
+            print(f"Centroide: {x} | Error: {error}")
+
             cv2.circle(frame, (x, y), 7, (0, 255, 0), -1)
 
             font = cv2.FONT_HERSHEY_SIMPLEX
