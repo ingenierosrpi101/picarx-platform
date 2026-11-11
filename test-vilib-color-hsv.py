@@ -135,8 +135,9 @@ while True:
         cv2.CHAIN_APPROX_SIMPLE
     )
 
-    for c in contornos:
+    if contornos:
 
+        c = max(contornos, key=cv2.contourArea)
         area = cv2.contourArea(c)
 
         if area > 3000:
