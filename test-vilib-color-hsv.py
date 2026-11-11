@@ -157,6 +157,15 @@ while True:
             # Calcular el error de posición
             error = x - centro_imagen
 
+            if error < -70:
+                decision = "Izquierda"
+
+            elif error > 70:
+                decision = "Derecha"
+
+            else:
+                decision = "Centro"
+
             print(f"Centroide: {x} | Error: {error}")
 
             cv2.circle(frame, (x, y), 7, (0, 255, 0), -1)
@@ -172,6 +181,16 @@ while True:
                 (0, 255, 0),
                 1,
                 cv2.LINE_AA
+            )
+
+            cv2.putText(
+                frame,
+                decision,
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 255, 255),
+                2
             )
 
             # Dibujar contorno en coordenadas originales
