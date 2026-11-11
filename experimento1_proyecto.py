@@ -49,10 +49,12 @@ if __name__ == "__main__":
             elif key == ord("d"):
                 px.stop()
                 estado = "PARO_SEGURO"
+                print("PARO SEGURO: El carro se detuvo y no puede avanzar hasta que se presione 'w'.")
                 inicio_alto = None
 
             elif key == ord("w") and estado in ("Parado", "PARO_SEGURO"):
                 estado = "AVANCE"
+                print("AVANCE: El carro avanzará hasta que se presione 's' o 'd'.")
                 px.forward(20)
 
             elif key == ord("s") and estado == "AVANCE" and alto_habilitado:
@@ -60,6 +62,7 @@ if __name__ == "__main__":
                 inicio_alto = time.monotonic()
                 alto_habilitado = False
                 estado = "ALTO_10S"
+                print("ALTO_10S: El carro se detuvo por 10 segundos. No puede avanzar hasta que pasen los 10 segundos o se presione 'd'.")
 
         # Después: revisar el temporizador en CADA vuelta.
             if estado == "ALTO_10S":
@@ -67,9 +70,10 @@ if __name__ == "__main__":
                     estado = "AVANCE"
                     inicio_alto = None
                     px.forward(20)
+                    print("AVANCE: El carro avanzará hasta que se presione 's' o 'd'.")
 
         cv2.imshow("Camera", frame)
-        
+
             
     finally:   
         print("Saliendo del programa...")
