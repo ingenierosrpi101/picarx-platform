@@ -7,6 +7,9 @@ from picarx import Picarx
 import readchar
 
 estado = "Parado"
+
+Vilib.camera_start()
+Vilib.display(local=False, web=True)
 manual = '''
 
 Presiona teclas para controlar el carro:
@@ -30,6 +33,14 @@ if __name__ == "__main__":
         inicio_sin_alto = None
         while True:
             key = cv2.waitKey(1) & 0xFF
+
+            frame_vilib = Vilib.img
+
+            if frame_vilib is None:
+                break
+
+            frame = frame_vilib.copy()
+        
 
             # Primero: atender las teclas.
             if key == ord("q"):
@@ -56,6 +67,9 @@ if __name__ == "__main__":
                     estado = "AVANCE"
                     inicio_alto = None
                     px.forward(20)
+
+        cv2.imshow("Camera", frame)
+        
             
     finally:   
         print("Saliendo del programa...")
