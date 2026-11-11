@@ -223,15 +223,15 @@ while True:
         2
     )
 
-    contador_frames += 1
+    contador_fps += 1
     ahora = time.monotonic()
     transcurrido = ahora - inicio_fps
 
     if transcurrido >= 1:
-        fps = contador_frames / transcurrido
+        fps = contador_fps / transcurrido
 
         # Reiniciar la cuenta para el siguiente intervalo.
-        contador_frames = 0
+        contador_fps = 0
         inicio_fps = ahora
 
     cv2.putText(
