@@ -1,13 +1,9 @@
 import cv2
 import os
-from time import sleep
 from vilib import Vilib
 
 Datos = 'n'
-
-# Iniciar cámara con Vilib
-Vilib.camera_start()
-Vilib.display(local=False, web=True)
+FUENTE = cv2.FONT_HERSHEY_SIMPLEX
 
 if not os.path.exists(Datos):
     print('Carpeta creada: ', Datos)
@@ -15,24 +11,37 @@ if not os.path.exists(Datos):
 
 count = 0
 
-while True:
-    comando = input("s: guardar | q: salir: ")
+try:
+    Vilib.camera_start()
+    Vilib.display(local=False, web=True)
 
-    if comando == "q":
-        break
+    while True:
+        frame_vilib = Vilib.img
 
-    if comando == "s":
-        # Se lee el frame DESPUÉS del input, para guardar la imagen actual
-        frame = Vilib.img
+        if frame_vilib is None:
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q") or key == 27:
+                break
+            continue
 
-        if frame is not None:
+        imAux = frame_vilib.copy()   # se guarda esta
+        frame = frame_vilib.copy()   # se muestra esta, con texto
+
+        cv2.putText(frame, f"Guardadas: {count}  |  s: guardar  q/Esc: salir",
+                    (10, 25), FUENTE, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.imshow('frame', frame)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('s'):
             ruta = Datos + '/objeto_{}.jpg'.format(count)
-            cv2.imwrite(ruta, frame)
+            cv2.imwrite(ruta, imAux)
             print('Imagen guardada: ' + ruta)
             count += 1
-        else:
-            print("Error: No se pudo leer el frame de la cámara")
+        elif key == ord('q') or key == 27:
+            break
 
-    sleep(0.1)
-
-Vilib.camera_close()
+finally:
+    try:
+        cv2.destroyAllWindows()
+    finally:
+        Vilib.camera_close()
