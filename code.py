@@ -1,5 +1,6 @@
 import cv2
 import os
+import numpy as np
 from vilib import Vilib
 
 Datos = 'p'
@@ -11,6 +12,25 @@ if not os.path.exists(Datos):
     print('Carpeta creada: ', Datos)
     os.makedirs(Datos)
 
+
+def obtener_frame():
+    """Convierte Vilib.img (ListProxy) en un arreglo NumPy BGR, o None."""
+    img = Vilib.img
+    if img is None:
+        return None
+    try:
+        frame = np.array(img[:], dtype=np.uint8)  # [:] trae una lista real
+    except Exception:
+        return None
+    # Si la imagen viene envuelta en una lista de un elemento: (1, alto, ancho, 3)
+    if frame.ndim == 4 and frame.shape[0] == 1:
+        frame = frame[0]
+    # Una imagen válida tiene 3 dimensiones: (alto, ancho, canales)
+    if frame.ndim != 3:
+        return None
+    return frame
+
+
 count = 0
 
 try:
@@ -18,18 +38,15 @@ try:
     Vilib.display(local=False, web=True)
 
     while True:
-        frame_vilib = Vilib.img
+        imAux = obtener_frame()
 
-        if frame_vilib is None:
-            # Aunque no haya imagen, atender teclado y ventanas
-            key = cv2.waitKey(1) & 0xFF
+        if imAux is None:
+            key = cv2.waitKey(10) & 0xFF
             if key == ord("q") or key == 27:
                 break
             continue
 
-        # Copia limpia (para guardar) y copia con dibujos (para mostrar)
-        imAux = frame_vilib.copy()
-        frame = frame_vilib.copy()
+        frame = imAux.copy()  # copia con dibujos para mostrar
 
         cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
         cv2.putText(frame, f"Guardadas: {count}  |  s: guardar  q/Esc: salir",
