@@ -1,17 +1,14 @@
 import cv2
-import numpy as np
-import imutils
-from vilib import Vilib
 import os
-import time
+from time import sleep
+from vilib import Vilib
+
+Datos = 'p'
 
 # Iniciar cámara con Vilib
 Vilib.camera_start()
-
-# Iniciar visualización (puedes quitarla si solo quieres la ventana de OpenCV)
 Vilib.display(local=False, web=True)
 
-Datos = 'p'
 if not os.path.exists(Datos):
     print('Carpeta creada: ', Datos)
     os.makedirs(Datos)
@@ -21,26 +18,23 @@ x2, y2 = 450, 398
 count = 0
 
 while True:
-    # Vilib.img se llena desde un hilo; al inicio puede ser None
-    if Vilib.img is None:
-        time.sleep(0.01)
-        continue
+    comando = input("s: guardar | q: salir: ")
 
-    frame = Vilib.img.copy()
-    imAux = frame.copy()
-
-    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-    objeto = imAux[y1:y2, x1:x2]
-
-    k = cv2.waitKey(1)
-    if k == ord('s'):
-        cv2.imwrite(Datos + '/objeto_{}.jpg'.format(count), objeto)
-        print('Imagen guardada:' + '/objeto_{}.jpg'.format(count))
-        count = count + 1
-    if k == 27:
+    if comando == "q":
         break
 
-    cv2.imshow('frame', frame)
+    if comando == "s":
+        frame = Vilib.img
+
+        if frame is not None:
+            objeto = frame[y1:y2, x1:x2]
+            ruta = Datos + '/objeto_{}.jpg'.format(count)
+            cv2.imwrite(ruta, objeto)
+            print('Imagen guardada: ' + ruta)
+            count += 1
+        else:
+            print("Error: No se pudo leer el frame de la cámara")
+
+    sleep(0.1)
 
 Vilib.camera_close()
-cv2.destroyAllWindows()
