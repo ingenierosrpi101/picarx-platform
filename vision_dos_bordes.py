@@ -29,8 +29,8 @@ high_H, high_S, high_V = max_value_H, max_value, max_value
 # Umbral inicial para el rectangulo mas pequeno; no es un valor universal.
 # Aumentarlo descarta MAS contornos; reducirlo acepta regiones mas pequenas.
 AREA_MINIMA = 300        # Area minima de cada contorno, en pixeles cuadrados.
-ROI_Y_INICIO = 0.50      # 30 % del alto: ajustar segun la camara.
-ROI_Y_FIN = 0.75         # 45 % del alto. Todo el ancho de la imagen.
+ROI_Y_INICIO = 0.30      # 30 % del alto: ajustar segun la camara.
+ROI_Y_FIN = 0.45         # 45 % del alto. Todo el ancho de la imagen.
 TOLERANCIA = 70          # Error entre -70 y +70 se considera centrado.
 FUENTE = cv2.FONT_HERSHEY_SIMPLEX
 
