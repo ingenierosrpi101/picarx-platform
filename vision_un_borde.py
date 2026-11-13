@@ -14,11 +14,11 @@ from vilib import Vilib
 BORDE = "izquierdo"
 
 # Conservamos la ROI de tu archivo anterior.
-ROI_Y_INICIO = 0.15
+ROI_Y_INICIO = 0.20
 ROI_Y_FIN = 0.45
 
 AREA_MINIMA = 100
-TOLERANCIA = 70
+TOLERANCIA = 60
 
 # Seguimiento del mismo contorno entre imagenes.
 SALTO_MAXIMO_PX = 96
