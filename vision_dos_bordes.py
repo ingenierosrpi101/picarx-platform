@@ -32,7 +32,7 @@ high_H, high_S, high_V = max_value_H, max_value, max_value
 # Aumentarlo descarta MAS contornos; reducirlo acepta regiones mas pequenas.
 AREA_MINIMA = 100        # Area minima de cada contorno, en pixeles cuadrados.
 ROI_Y_INICIO = 0.15      # 15 % del alto: ajustar segun la camara.
-ROI_Y_FIN = 0.30         # 30 % del alto. Todo el ancho de la imagen.
+ROI_Y_FIN = 0.60         # 30 % del alto. Todo el ancho de la imagen.
 TOLERANCIA = 70          # Error entre -70 y +70 se considera centrado.
 # Valores iniciales para probar; no estan calibrados con tu pista.
 TIEMPO_ESTIMACION = 1.0   # Segundos maximos desde la ultima pareja observada.
