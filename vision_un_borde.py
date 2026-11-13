@@ -1,8 +1,10 @@
 import json
 import time
+import threading
 from pathlib import Path
 
 import cv2
+from picarx import Picarx
 from vilib import Vilib
 
 
@@ -14,11 +16,54 @@ from vilib import Vilib
 BORDE = "izquierdo"
 
 # Conservamos la ROI de tu archivo anterior.
-ROI_Y_INICIO = 0.20
+ROI_Y_INICIO = 0.15
 ROI_Y_FIN = 0.45
 
 AREA_MINIMA = 100
-TOLERANCIA = 60
+TOLERANCIA = 70  # Solo indicador visual; NO anula el control P.
+KP = 0.08        # Grados por pixel: valor inicial para ajustar en pista.
+SIGNO_DIRECCION = 1  # Cambiar a -1 si corrige al lado contrario.
+ANGULO_MAX = 25.0
+VELOCIDAD = 20   # Comando de potencia, no velocidad medida.
+TIMEOUT_CONTROL = 0.6
+TIMEOUT_IMAGEN = 1.0
+
+# Teclas: S guardar HSV, C referencia, W avanzar, D/espacio parar,
+# T probar direccion sin avance, R recalibrar, Q/Esc salir.
+modo = "PARADO"
+angulo = 0.0
+px = None
+candado = threading.Lock()
+terminar_watchdog = threading.Event()
+fallo_watchdog = threading.Event()
+ultimo_control = time.monotonic()
+watchdog = None
+ultima_muestra = None
+ultimo_cambio_imagen = time.monotonic()
+
+
+def angulo_proporcional(error):
+    return max(-ANGULO_MAX, min(ANGULO_MAX, SIGNO_DIRECCION * KP * error))
+
+
+def parar():
+    global modo, angulo
+    modo = "PARADO"
+    angulo = 0.0
+    if px is not None:
+        with candado:
+            px.stop()
+            px.set_dir_servo_angle(0)
+
+
+def vigilar_control():
+    # Para si el ciclo deja de renovar comandos; no sustituye un paro fisico.
+    while not terminar_watchdog.wait(0.05):
+        with candado:
+            if time.monotonic() - ultimo_control > TIMEOUT_CONTROL:
+                fallo_watchdog.set()
+                px.stop()
+
 
 # Seguimiento del mismo contorno entre imagenes.
 SALTO_MAXIMO_PX = 96
@@ -226,6 +271,11 @@ if not 0 <= ROI_Y_INICIO < ROI_Y_FIN <= 1:
 cargar_hsv()
 
 try:
+    px = Picarx()
+    px.stop()
+    px.set_dir_servo_angle(0)
+    watchdog = threading.Thread(target=vigilar_control, daemon=True)
+    watchdog.start()
     Vilib.camera_start()
     Vilib.display(local=False, web=True)
 
@@ -245,6 +295,7 @@ try:
         frame_vilib = Vilib.img
 
         if frame_vilib is None or frame_vilib.size == 0:
+            parar()
             if referencia_borde is not None:
                 borde_perdido = True
 
@@ -257,6 +308,19 @@ try:
             continue
 
         frame = frame_vilib.copy()
+        # Heuristica conservadora: detectar imagen sin cambios, incluso si
+        # Vilib conserva el ultimo frame al fallar la captura.
+        muestra = frame[::8, ::8].tobytes()
+        if muestra != ultima_muestra:
+            ultima_muestra = muestra
+            ultimo_cambio_imagen = time.monotonic()
+        imagen_actual = time.monotonic() - ultimo_cambio_imagen < TIMEOUT_IMAGEN
+        if not imagen_actual or fallo_watchdog.is_set():
+            parar()
+            if referencia_borde is not None:
+                borde_perdido = True
+            fallo_watchdog.clear()
+            mensaje = "Paro por imagen/ciclo: recoloca, C y luego W"
         height, width = frame.shape[:2]
 
         if calibrando:
@@ -286,6 +350,7 @@ try:
             geometria_anterior is not None
             and geometria != geometria_anterior
         ):
+            parar()
             referencia_borde = None
             desplazamiento_centro = None
             x_anterior = None
@@ -391,6 +456,24 @@ try:
                 else:
                     decision = "Dentro de tolerancia"
 
+        # Control P continuo (la tolerancia solo cambia el texto).
+        if not referencia_valida or not imagen_actual:
+            parar()
+        with candado:
+            if fallo_watchdog.is_set():
+                modo = "PARADO"
+            angulo = angulo_proporcional(error) if referencia_valida else 0.0
+            if modo in ("AVANCE", "PRUEBA") and referencia_valida:
+                px.set_dir_servo_angle(angulo)
+                if modo == "AVANCE":
+                    px.forward(VELOCIDAD)
+                else:
+                    px.stop()
+            else:
+                px.stop()
+                px.set_dir_servo_angle(0)
+            ultimo_control = time.monotonic()
+
         # ----------------------------------------------------
         # 5.6 DIBUJAR CONTORNOS
         # ----------------------------------------------------
@@ -492,7 +575,7 @@ try:
 
         cv2.putText(
             frame,
-            f"Candidatos: {len(candidatos)}",
+            f"{modo} | P: {angulo:+.1f} grados | Candidatos: {len(candidatos)}",
             (15, height - 75),
             FUENTE, 0.5, (0, 255, 255), 1,
         )
@@ -527,6 +610,18 @@ try:
         if key in (ord("q"), ord("Q"), 27):
             break
 
+        elif key in (ord("d"), ord("D"), 32):
+            parar()
+            mensaje = "Parado | W avanzar | T direccion sin avance"
+
+        elif key in (ord("w"), ord("W"), ord("t"), ord("T")):
+            if referencia_valida and imagen_actual and not calibrando:
+                modo = "AVANCE" if key in (ord("w"), ord("W")) else "PRUEBA"
+                mensaje = "D/espacio: parar | Q: salir"
+            else:
+                parar()
+                mensaje = "Necesitas imagen y referencia validas: S y C"
+
         elif key in (ord("s"), ord("S")) and calibrando:
             try:
                 guardar_hsv()
@@ -541,6 +636,12 @@ try:
                 mensaje = "C: fijar referencia | R: HSV | Q: salir"
 
         elif key in (ord("c"), ord("C")) and not calibrando:
+            parar()
+            referencia_borde = desplazamiento_centro = x_anterior = None
+            borde_perdido = False
+            if not imagen_actual:
+                mensaje = "Imagen sin cambios: revisa camara"
+                continue
             indice = candidato_inicial(candidatos)
 
             if indice is None:
@@ -571,7 +672,7 @@ try:
             )
 
             borde_perdido = False
-            mensaje = "Referencia fijada | C: repetir | R: HSV | Q: salir"
+            mensaje = "C listo | T probar direccion | W avanzar | D parar"
 
             print(
                 f"Borde: {BORDE}\n"
@@ -581,6 +682,7 @@ try:
             )
 
         elif key in (ord("r"), ord("R")) and not calibrando:
+            parar()
             referencia_borde = None
             desplazamiento_centro = None
             x_anterior = None
@@ -591,7 +693,13 @@ try:
             mensaje = "Ajusta HSV y pulsa S"
 
 finally:
+    terminar_watchdog.set()
     try:
-        cv2.destroyAllWindows()
+        parar()
     finally:
-        Vilib.camera_close()
+        if watchdog is not None:
+            watchdog.join(timeout=1)
+        try:
+            cv2.destroyAllWindows()
+        finally:
+            Vilib.camera_close()
