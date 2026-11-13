@@ -1,11 +1,10 @@
 """
 Detección por color con Vilib y OpenCV.
-Flujo: imagen → ROI → filtro HSV → dos contornos → centroides → centro del carril → decisión.
-Con un solo limite, estima temporalmente el centro usando la pareja anterior.
-Primero debe ver ambos. Medido: verde. Estimado: naranja.
+Flujo: imagen → ROI → HSV → borde izquierdo → error respecto a su posicion deseada.
 Solo muestra resultados: todavía no controla motores.
-S: guardar HSV y cerrar sliders. R: recalibrar.
-El JSON se carga automaticamente al iniciar.
+S: guardar HSV. R: recalibrar. C: fijar referencia del borde con el carrito centrado.
+El JSON HSV se carga al iniciar. La referencia C se fija en cada ejecucion.
+Si pierde el borde, recoloca el carrito centrado y pulsa C para reiniciar.
 Salir: tecla q o Esc con una ventana de OpenCV seleccionada.
 """
 
@@ -32,12 +31,11 @@ high_H, high_S, high_V = max_value_H, max_value, max_value
 # Aumentarlo descarta MAS contornos; reducirlo acepta regiones mas pequenas.
 AREA_MINIMA = 100        # Area minima de cada contorno, en pixeles cuadrados.
 ROI_Y_INICIO = 0.15      # 15 % del alto: ajustar segun la camara.
-ROI_Y_FIN = 0.60         # 30 % del alto. Todo el ancho de la imagen.
+ROI_Y_FIN = 0.30         # 30 % del alto. Todo el ancho de la imagen.
 TOLERANCIA = 70          # Error entre -70 y +70 se considera centrado.
-# Valores iniciales para probar; no estan calibrados con tu pista.
-TIEMPO_ESTIMACION = 1.0   # Segundos maximos desde la ultima pareja observada.
-SALTO_MAXIMO = 0.15      # Desplazamiento permitido: fraccion del ancho de imagen.
-MARGEN_IDENTIDAD = 0.05  # Diferencia minima entre distancias para elegir un lado.
+# Asociacion temporal del mismo borde: valores iniciales, ajustables.
+SALTO_MAXIMO_PX = 96  # Maximo cambio de cx entre imagenes, para 640 px de ancho.
+MARGEN_ASOCIACION_PX = 20  # Rechazar dos candidatos casi igual de cercanos.
 FUENTE = cv2.FONT_HERSHEY_SIMPLEX
 
 window_capture_name = "Video Capture"
@@ -151,75 +149,24 @@ def crear_sliders():
                       high_V, max_value, on_high_V_thresh_trackbar)
 
 
-class SeguimientoCarril:
-    """Memoria temporal. El ancho se actualiza SOLO al observar dos limites.
-
-    actualizar devuelve (centro o None, modo, etiquetas de los candidatos).
-    Con uno solo se usa proximidad a las posiciones previas y se conserva
-    la identidad durante esa perdida. No se decide por mitad de imagen.
+def elegir_borde(xs, x_anterior, ancho):
+    """Devuelve indice del candidato cercano o None si no es identificable.
+    La proximidad es una heuristica: no reconoce semanticamente la pista.
     """
-    def __init__(self):
-        self.reiniciar()
-
-    def reiniciar(self):
-        self.izq = self.der = self.ancho = self.ultimo_par = None
-        self.lado_unico = None
-
-    def actualizar(self, xs, ahora, ancho_imagen):
-        if len(xs) == 2:
-            izq, der = sorted(xs)
-            if der <= izq:
-                self.reiniciar()
-                return None, "PAREJA INVALIDA", []
-            self.izq, self.der = izq, der
-            self.ancho = der - izq
-            self.ultimo_par = ahora
-            self.lado_unico = None
-            etiquetas = ["IZQ" if x == izq else "DER" for x in xs]
-            return (izq + der) / 2, "MEDIDO", etiquetas
-
-        if len(xs) != 1:
-            self.reiniciar()
-            modo = "SIN LIMITES" if not xs else "DETECCION AMBIGUA"
-            return None, modo, []
-        if self.ultimo_par is None:
-            return None, "FALTA REFERENCIA PREVIA", []
-        if ahora - self.ultimo_par > TIEMPO_ESTIMACION:
-            self.reiniciar()
-            return None, "ESTIMACION VENCIDA", []
-
-        x = xs[0]
-        di, dd = abs(x - self.izq), abs(x - self.der)
-        lado = self.lado_unico
-        if lado is None:
-            # Si es casi igual de cercano a ambos, no asignar identidad.
-            if abs(di - dd) < MARGEN_IDENTIDAD * ancho_imagen:
-                self.reiniciar()
-                return None, "IDENTIDAD DUDOSA", []
-            lado = "IZQ" if di < dd else "DER"
-        distancia = di if lado == "IZQ" else dd
-        if distancia > SALTO_MAXIMO * ancho_imagen:
-            self.reiniciar()
-            return None, "SALTO DE POSICION", []
-
-        if lado == "IZQ":
-            centro = x + self.ancho / 2
-        else:
-            centro = x - self.ancho / 2
-        if not 0 <= centro < ancho_imagen:
-            self.reiniciar()
-            return None, "CENTRO FUERA DE VISTA", []
-        self.lado_unico = lado
-        if lado == "IZQ":
-            self.izq = x
-        else:
-            self.der = x
-        # No renovar ultimo_par ni ancho con informacion estimada.
-        return centro, "ESTIMADO " + lado, [lado]
+    if not xs:
+        return None
+    distancias = sorted((abs(x - x_anterior), i) for i, x in enumerate(xs))
+    if distancias[0][0] > SALTO_MAXIMO_PX * ancho / 640:
+        return None
+    if len(distancias) > 1:
+        if distancias[1][0] - distancias[0][0] < MARGEN_ASOCIACION_PX * ancho / 640:
+            return None
+    return distancias[0][1]
 
 
-seguimiento = SeguimientoCarril()
-hsv_anterior = None
+x_deseada = None
+x_anterior = None
+borde_perdido = False
 geometria_anterior = None
 
 
@@ -250,7 +197,8 @@ try:
         frame_vilib = Vilib.img
 
         if frame_vilib is None:
-            seguimiento.reiniciar()
+            if x_deseada is not None:
+                borde_perdido = True
             # Aunque no haya imagen, atender teclado y ventanas.
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q") or key == 27:
@@ -262,7 +210,7 @@ try:
 
         # Reiniciar por imagen para no conservar una decisión anterior
         # cuando ya no se encuentre un contorno válido.
-        decision = "SIN DOS LIMITES"
+        decision = "SIN REFERENCIA: pulsa C"
         error = None
 
         # 6.2 Rectangulo comun para ambos limites amarillos.
@@ -310,45 +258,53 @@ try:
         for c, cx, cy in candidatos:
             cv2.drawContours(frame, [c], -1, (180, 180, 180), 1, offset=(x1, y1))
 
-        # Invalidar memoria si cambian HSV, resolucion o ROI.
-        hsv_actual = (low_H, low_S, low_V, high_H, high_S, high_V)
-        geometria_actual = (width, height, x1, x2, y1, y2)
-        if hsv_actual != hsv_anterior or geometria_actual != geometria_anterior:
-            seguimiento.reiniciar()
-        hsv_anterior = hsv_actual
-        geometria_anterior = geometria_actual
-
-        # Dos limites: medir. Uno: estimar brevemente con el ancho anterior.
-        centro_carril, modo, etiquetas = seguimiento.actualizar(
-            [candidato[1] for candidato in candidatos], time.monotonic(), width)
-        decision = modo
-        if centro_carril is not None:
-            error = centro_carril - width / 2.0
-            if error < -TOLERANCIA:
-                direccion = "Izquierda"
-            elif error > TOLERANCIA:
-                direccion = "Derecha"
+        # La referencia depende de resolucion y ROI. Reiniciar si cambian.
+        geometria = (width, height, x1, x2, y1, y2)
+        if geometria_anterior is not None and geometria != geometria_anterior:
+            x_deseada = x_anterior = None
+            borde_perdido = False
+        geometria_anterior = geometria
+        elegido = None
+        if x_deseada is None:
+            # Vista previa: candidato mas a la izquierda.
+            # Verifica visualmente que sea el borde antes de pulsar C.
+            if candidatos:
+                elegido = min(range(len(candidatos)), key=lambda i: candidatos[i][1])
+            decision = "Guarda HSV con S" if calibrando else "C: fijar borde izquierdo"
+        elif borde_perdido:
+            decision = "BORDE PERDIDO: recoloca y pulsa C"
+        else:
+            elegido = elegir_borde([c[1] for c in candidatos], x_anterior, width)
+            if elegido is None:
+                borde_perdido = True
+                decision = "BORDE PERDIDO: recoloca y pulsa C"
             else:
-                direccion = "Centro"
-            decision = f"{modo}: {direccion}"
+                x_anterior = candidatos[elegido][1]
+                # NO se calcula el centro del carril ni un ancho anterior.
+                error = x_anterior - x_deseada
+                if error < -TOLERANCIA:
+                    decision = "Borde a la izquierda de referencia"
+                elif error > TOLERANCIA:
+                    decision = "Borde a la derecha de referencia"
+                else:
+                    decision = "Borde dentro de tolerancia"
 
-            # Dibujar SOLO centroides observados; no inventar el contorno ausente.
-            for (c, cx, cy), etiqueta in zip(candidatos, etiquetas):
-                color = (255, 0, 255) if etiqueta == "IZQ" else (255, 255, 0)
-                cv2.drawContours(frame, [c], -1, color, 2, offset=(x1, y1))
-                cv2.circle(frame, (round(cx), round(cy)), 6, color, -1)
-                cv2.putText(frame, f"{etiqueta} x={cx:.0f}",
-                            (max(0, round(cx) - 40), y2 + 20), FUENTE, 0.5, color, 1)
+        # Todos los centroides se dibujan, incluso cuando no hay error valido.
+        for i, (c, cx, cy) in enumerate(candidatos):
+            color = (255, 0, 255) if i == elegido else (180, 180, 180)
+            cv2.drawContours(frame, [c], -1, color, 2, offset=(x1, y1))
+            cv2.circle(frame, (round(cx), round(cy)), 6, color, -1)
+        if x_deseada is not None:
+            # Azul: posicion deseada DEL BORDE, no centro de imagen.
+            cv2.line(frame, (round(x_deseada), y1), (round(x_deseada), y2),
+                     (255, 0, 0), 2)
+            cv2.putText(frame, f"Referencia borde x={x_deseada:.1f}",
+                        (20, height - 75), FUENTE, 0.55, (255, 150, 0), 1)
+            if error is not None:
+                y_ref = (y1 + y2) // 2
+                cv2.line(frame, (round(x_deseada), y_ref),
+                         (round(x_anterior), y_ref), (0, 255, 0), 2)
 
-            # Verde: centro medido. Naranja: centro estimado.
-            color_centro = (0, 255, 0) if modo == "MEDIDO" else (0, 165, 255)
-            y_referencia = (y1 + y2) // 2
-            cv2.line(frame, (width // 2, y_referencia),
-                     (round(centro_carril), y_referencia), color_centro, 1)
-            cv2.circle(frame, (round(centro_carril), y_referencia), 8, color_centro, -1)
-
-        # Centro de imagen fijo, incluso si falta uno de los limites.
-        cv2.line(frame, (width // 2, y1), (width // 2, y2), (255, 0, 0), 2)
         cv2.putText(frame, f"Contornos: {len(contornos)} | Validos: {len(candidatos)}",
                     (20, height - 50), FUENTE, 0.55, (0, 255, 255), 1)
         texto_error = "Error: --" if error is None else f"Error: {error:+.1f} px"
@@ -359,7 +315,7 @@ try:
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
         cv2.putText(
             frame, decision, (20, 40),
-            FUENTE, 1, (0, 255, 255), 2
+            FUENTE, 0.65, (0, 255, 255), 2
         )
 
         # 6.9 Medir las vueltas con imagen por segundo.
@@ -402,13 +358,22 @@ try:
                 mensaje = "Error al guardar. Revisa terminal y pulsa S otra vez."
                 print(f"No se guardo el JSON: {exc}")
             else:
-                seguimiento.reiniciar()
                 calibrando = False
                 cv2.destroyWindow(window_detection_name)
-                mensaje = "HSV guardado. R recalibrar / Q salir"
+                mensaje = "C fija referencia / R recalibrar / Q salir"
+        elif key in (ord("c"), ord("C")) and not calibrando:
+            if candidatos:
+                # Pulsa C SOLO al estar bien colocado y ver el borde izquierdo.
+                seleccionado = min(candidatos, key=lambda item: item[1])
+                x_deseada = x_anterior = seleccionado[1]
+                borde_perdido = False
+                print(f"Referencia izquierda fijada en x={x_deseada:.1f}")
+            else:
+                mensaje = "No hay candidato para fijar. Revisa mascara."
         elif key in (ord("r"), ord("R")) and not calibrando:
+            x_deseada = x_anterior = None
+            borde_perdido = False
             cv2.destroyWindow("Mascara amarilla")
-            seguimiento.reiniciar()
             crear_sliders()
             calibrando = True
             mensaje = "Calibrando amarillo: S guardar"
