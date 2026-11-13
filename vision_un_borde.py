@@ -1,4 +1,5 @@
 import json
+import math
 import time
 import threading
 from pathlib import Path
@@ -91,6 +92,116 @@ borde_perdido = False
 geometria_anterior = None
 
 mensaje = "Ajusta HSV y pulsa S"
+
+
+
+# Angulos de trabajo relativos al cero mecanico ya calibrado.
+# No se modifican cam_pan_cali_val ni cam_tilt_cali_val.
+CAM_PAN_INICIAL = 0.0
+CAM_TILT_INICIAL = 0.0
+PASO_CAMARA = 1.0
+CAM_PAN_MIN, CAM_PAN_MAX = -30.0, 30.0
+CAM_TILT_MIN, CAM_TILT_MAX = -30.0, 30.0
+ARCHIVO_CAMARA = Path(__file__).resolve().with_name("posicion_camara.json")
+cam_pan = CAM_PAN_INICIAL
+cam_tilt = CAM_TILT_INICIAL
+
+
+def cargar_posicion_camara():
+    global cam_pan, cam_tilt
+    if not ARCHIVO_CAMARA.exists():
+        return
+    try:
+        datos = json.loads(ARCHIVO_CAMARA.read_text(encoding="utf-8"))
+        pan, tilt = datos["pan"], datos["tilt"]
+        for valor, minimo, maximo in (
+            (pan, CAM_PAN_MIN, CAM_PAN_MAX),
+            (tilt, CAM_TILT_MIN, CAM_TILT_MAX),
+        ):
+            if (type(valor) not in (int, float) or not math.isfinite(valor)
+                    or not minimo <= valor <= maximo):
+                raise ValueError("Angulo de camara fuera de rango")
+        cam_pan, cam_tilt = float(pan), float(tilt)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print("No se cargo posicion de camara:", exc)
+
+
+def ajustar_camara():
+    """Vista en vivo y motores detenidos. Enter guarda; Q sale del programa."""
+    global cam_pan, cam_tilt, ultimo_control
+    global referencia_borde, desplazamiento_centro, x_anterior
+    global borde_perdido, ultima_muestra, ultimo_cambio_imagen
+    parar()
+    referencia_borde = desplazamiento_centro = x_anterior = None
+    borde_perdido = False
+    seleccionado = "tilt"
+    aviso = "ENTER guardar y continuar | Q/Esc salir"
+    with candado:
+        px.set_cam_pan_angle(cam_pan)
+        px.set_cam_tilt_angle(cam_tilt)
+
+    while True:
+        with candado:
+            px.stop()
+            ultimo_control = time.monotonic()
+        fallo_watchdog.clear()
+        original = Vilib.img
+        hay_imagen = original is not None and original.size > 0
+        if hay_imagen:
+            vista = original.copy()
+            h, w = vista.shape[:2]
+            cv2.rectangle(vista, (0, int(h * ROI_Y_INICIO)),
+                          (w - 1, int(h * ROI_Y_FIN)), (0, 255, 255), 2)
+            cv2.line(vista, (w // 2, 0), (w // 2, h - 1), (255, 0, 0), 1)
+            textos = [
+                "AJUSTE CAMARA - motores detenidos",
+                f"2: PAN {cam_pan:+.1f} | 3: TILT {cam_tilt:+.1f}",
+                f"Seleccion: {seleccionado} | W/D + | S/A - | paso {PASO_CAMARA}",
+                "0: ambos a cero | espacio: detener",
+                aviso,
+            ]
+            for i, texto in enumerate(textos):
+                cv2.putText(vista, texto, (10, h - 115 + i * 23),
+                            FUENTE, 0.45, (0, 255, 255), 1)
+            cv2.imshow(VENTANA_VIDEO, vista)
+        key = cv2.waitKey(20) & 0xFF
+        if key in (ord("q"), ord("Q"), 27):
+            return False
+        if key == ord("2"):
+            seleccionado = "pan"
+        elif key == ord("3"):
+            seleccionado = "tilt"
+        elif key in (ord("w"), ord("W"), ord("d"), ord("D"),
+                     ord("s"), ord("S"), ord("a"), ord("A")):
+            paso = PASO_CAMARA if key in (ord("w"), ord("W"), ord("d"), ord("D")) else -PASO_CAMARA
+            with candado:
+                if seleccionado == "pan":
+                    cam_pan = round(max(CAM_PAN_MIN, min(CAM_PAN_MAX, cam_pan + paso)), 2)
+                    px.set_cam_pan_angle(cam_pan)
+                else:
+                    cam_tilt = round(max(CAM_TILT_MIN, min(CAM_TILT_MAX, cam_tilt + paso)), 2)
+                    px.set_cam_tilt_angle(cam_tilt)
+        elif key == ord("0"):
+            cam_pan = cam_tilt = 0.0
+            with candado:
+                px.set_cam_pan_angle(cam_pan)
+                px.set_cam_tilt_angle(cam_tilt)
+        elif key in (10, 13):
+            if not hay_imagen:
+                print("Espera a tener imagen antes de confirmar la camara.")
+                continue
+            try:
+                temporal = ARCHIVO_CAMARA.with_suffix(".tmp")
+                temporal.write_text(json.dumps({"pan": cam_pan, "tilt": cam_tilt}, indent=4), encoding="utf-8")
+                temporal.replace(ARCHIVO_CAMARA)
+            except OSError as exc:
+                print("No se guardaron los angulos:", exc)
+                aviso = "Error al guardar: revisa terminal y pulsa ENTER"
+                continue
+            ultima_muestra = None
+            ultimo_cambio_imagen = time.monotonic()
+            print(f"Camara guardada: pan={cam_pan}, tilt={cam_tilt}")
+            return True
 
 
 # ============================================================
@@ -274,14 +385,18 @@ try:
     px = Picarx()
     px.stop()
     px.set_dir_servo_angle(0)
-    watchdog = threading.Thread(target=vigilar_control, daemon=True)
-    watchdog.start()
     Vilib.camera_start()
     Vilib.display(local=False, web=True)
 
     cv2.namedWindow(VENTANA_VIDEO)
     cv2.namedWindow(VENTANA_MASCARA)
+    cargar_posicion_camara()
+    if not ajustar_camara():
+        raise SystemExit(0)
     crear_sliders()
+    ultimo_control = time.monotonic()
+    watchdog = threading.Thread(target=vigilar_control, daemon=True)
+    watchdog.start()
 
     inicio_fps = time.monotonic()
     contador_fps = 0
@@ -568,7 +683,7 @@ try:
 
         cv2.putText(
             frame,
-            f"FPS ciclo: {fps:.1f} | Borde: {BORDE}",
+            f"FPS: {fps:.1f} | Pan {cam_pan:+.0f} Tilt {cam_tilt:+.0f} | M: camara",
             (15, height - 100),
             FUENTE, 0.5, (0, 255, 255), 1,
         )
@@ -609,6 +724,14 @@ try:
 
         if key in (ord("q"), ord("Q"), 27):
             break
+
+        elif key in (ord("m"), ord("M")):
+            if not ajustar_camara():
+                break
+            mensaje = "Camara ajustada: centra el carrito y pulsa C | M camara"
+            inicio_fps = time.monotonic()
+            contador_fps = 0
+            continue
 
         elif key in (ord("d"), ord("D"), 32):
             parar()
