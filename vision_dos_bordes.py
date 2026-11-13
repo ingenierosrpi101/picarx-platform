@@ -1,6 +1,8 @@
 """
 Detección por color con Vilib y OpenCV.
 Flujo: imagen → ROI → filtro HSV → dos contornos → centroides → centro del carril → decisión.
+Con un solo limite, estima temporalmente el centro usando la pareja anterior.
+Primero debe ver ambos. Medido: verde. Estimado: naranja.
 Solo muestra resultados: todavía no controla motores.
 S: guardar HSV y cerrar sliders. R: recalibrar.
 El JSON se carga automaticamente al iniciar.
@@ -29,9 +31,13 @@ high_H, high_S, high_V = max_value_H, max_value, max_value
 # Umbral inicial para el rectangulo mas pequeno; no es un valor universal.
 # Aumentarlo descarta MAS contornos; reducirlo acepta regiones mas pequenas.
 AREA_MINIMA = 100        # Area minima de cada contorno, en pixeles cuadrados.
-ROI_Y_INICIO = 0.15      # 30 % del alto: ajustar segun la camara.
-ROI_Y_FIN = 0.30         # 45 % del alto. Todo el ancho de la imagen.
+ROI_Y_INICIO = 0.15      # 15 % del alto: ajustar segun la camara.
+ROI_Y_FIN = 0.30         # 30 % del alto. Todo el ancho de la imagen.
 TOLERANCIA = 70          # Error entre -70 y +70 se considera centrado.
+# Valores iniciales para probar; no estan calibrados con tu pista.
+TIEMPO_ESTIMACION = 1.0   # Segundos maximos desde la ultima pareja observada.
+SALTO_MAXIMO = 0.15      # Desplazamiento permitido: fraccion del ancho de imagen.
+MARGEN_IDENTIDAD = 0.05  # Diferencia minima entre distancias para elegir un lado.
 FUENTE = cv2.FONT_HERSHEY_SIMPLEX
 
 window_capture_name = "Video Capture"
@@ -145,6 +151,78 @@ def crear_sliders():
                       high_V, max_value, on_high_V_thresh_trackbar)
 
 
+class SeguimientoCarril:
+    """Memoria temporal. El ancho se actualiza SOLO al observar dos limites.
+
+    actualizar devuelve (centro o None, modo, etiquetas de los candidatos).
+    Con uno solo se usa proximidad a las posiciones previas y se conserva
+    la identidad durante esa perdida. No se decide por mitad de imagen.
+    """
+    def __init__(self):
+        self.reiniciar()
+
+    def reiniciar(self):
+        self.izq = self.der = self.ancho = self.ultimo_par = None
+        self.lado_unico = None
+
+    def actualizar(self, xs, ahora, ancho_imagen):
+        if len(xs) == 2:
+            izq, der = sorted(xs)
+            if der <= izq:
+                self.reiniciar()
+                return None, "PAREJA INVALIDA", []
+            self.izq, self.der = izq, der
+            self.ancho = der - izq
+            self.ultimo_par = ahora
+            self.lado_unico = None
+            etiquetas = ["IZQ" if x == izq else "DER" for x in xs]
+            return (izq + der) / 2, "MEDIDO", etiquetas
+
+        if len(xs) != 1:
+            self.reiniciar()
+            modo = "SIN LIMITES" if not xs else "DETECCION AMBIGUA"
+            return None, modo, []
+        if self.ultimo_par is None:
+            return None, "FALTA REFERENCIA PREVIA", []
+        if ahora - self.ultimo_par > TIEMPO_ESTIMACION:
+            self.reiniciar()
+            return None, "ESTIMACION VENCIDA", []
+
+        x = xs[0]
+        di, dd = abs(x - self.izq), abs(x - self.der)
+        lado = self.lado_unico
+        if lado is None:
+            # Si es casi igual de cercano a ambos, no asignar identidad.
+            if abs(di - dd) < MARGEN_IDENTIDAD * ancho_imagen:
+                self.reiniciar()
+                return None, "IDENTIDAD DUDOSA", []
+            lado = "IZQ" if di < dd else "DER"
+        distancia = di if lado == "IZQ" else dd
+        if distancia > SALTO_MAXIMO * ancho_imagen:
+            self.reiniciar()
+            return None, "SALTO DE POSICION", []
+
+        if lado == "IZQ":
+            centro = x + self.ancho / 2
+        else:
+            centro = x - self.ancho / 2
+        if not 0 <= centro < ancho_imagen:
+            self.reiniciar()
+            return None, "CENTRO FUERA DE VISTA", []
+        self.lado_unico = lado
+        if lado == "IZQ":
+            self.izq = x
+        else:
+            self.der = x
+        # No renovar ultimo_par ni ancho con informacion estimada.
+        return centro, "ESTIMADO " + lado, [lado]
+
+
+seguimiento = SeguimientoCarril()
+hsv_anterior = None
+geometria_anterior = None
+
+
 # 4. CÁMARA, VENTANAS Y SLIDERS
 # try/finally permite cerrar los recursos también al presionar Ctrl+C
 # o si ocurre un error durante la ejecución.
@@ -172,6 +250,7 @@ try:
         frame_vilib = Vilib.img
 
         if frame_vilib is None:
+            seguimiento.reiniciar()
             # Aunque no haya imagen, atender teclado y ventanas.
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q") or key == 27:
@@ -231,41 +310,42 @@ try:
         for c, cx, cy in candidatos:
             cv2.drawContours(frame, [c], -1, (180, 180, 180), 1, offset=(x1, y1))
 
-        # Con mas de dos candidatos no adivinar cuales son los limites.
-        if len(candidatos) > 2:
-            decision = "DETECCION AMBIGUA"
-        elif len(candidatos) == 2:
-            # Ordenar por posicion horizontal, no por area.
-            izquierdo, derecho = sorted(candidatos, key=lambda item: item[1])
+        # Invalidar memoria si cambian HSV, resolucion o ROI.
+        hsv_actual = (low_H, low_S, low_V, high_H, high_S, high_V)
+        geometria_actual = (width, height, x1, x2, y1, y2)
+        if hsv_actual != hsv_anterior or geometria_actual != geometria_anterior:
+            seguimiento.reiniciar()
+        hsv_anterior = hsv_actual
+        geometria_anterior = geometria_actual
 
-            # 6.6 Punto medio horizontal de ambos centroides.
-            centro_carril = (izquierdo[1] + derecho[1]) / 2.0
-            centro_imagen = width / 2.0
-            error = centro_carril - centro_imagen
+        # Dos limites: medir. Uno: estimar brevemente con el ancho anterior.
+        centro_carril, modo, etiquetas = seguimiento.actualizar(
+            [candidato[1] for candidato in candidatos], time.monotonic(), width)
+        decision = modo
+        if centro_carril is not None:
+            error = centro_carril - width / 2.0
             if error < -TOLERANCIA:
-                decision = "Izquierda"
+                direccion = "Izquierda"
             elif error > TOLERANCIA:
-                decision = "Derecha"
+                direccion = "Derecha"
             else:
-                decision = "Centro"
+                direccion = "Centro"
+            decision = f"{modo}: {direccion}"
 
-            # 6.7 Dibujar los contornos reales y sus centroides.
-            for (c, cx, cy), etiqueta, color in (
-                    (izquierdo, "IZQ", (255, 0, 255)),
-                    (derecho, "DER", (255, 255, 0))):
+            # Dibujar SOLO centroides observados; no inventar el contorno ausente.
+            for (c, cx, cy), etiqueta in zip(candidatos, etiquetas):
+                color = (255, 0, 255) if etiqueta == "IZQ" else (255, 255, 0)
                 cv2.drawContours(frame, [c], -1, color, 2, offset=(x1, y1))
-                punto = (round(cx), round(cy))
-                cv2.circle(frame, punto, 6, color, -1)
+                cv2.circle(frame, (round(cx), round(cy)), 6, color, -1)
                 cv2.putText(frame, f"{etiqueta} x={cx:.0f}",
-                            (max(0, punto[0] - 40), y2 + 20),
-                            FUENTE, 0.5, color, 1)
+                            (max(0, round(cx) - 40), y2 + 20), FUENTE, 0.5, color, 1)
 
-            # La altura del punto verde es de dibujo; el control usa solo x.
+            # Verde: centro medido. Naranja: centro estimado.
+            color_centro = (0, 255, 0) if modo == "MEDIDO" else (0, 165, 255)
             y_referencia = (y1 + y2) // 2
-            cv2.line(frame, (round(izquierdo[1]), y_referencia),
-                     (round(derecho[1]), y_referencia), (0, 255, 0), 1)
-            cv2.circle(frame, (round(centro_carril), y_referencia),
-                       8, (0, 255, 0), -1)
+            cv2.line(frame, (width // 2, y_referencia),
+                     (round(centro_carril), y_referencia), color_centro, 1)
+            cv2.circle(frame, (round(centro_carril), y_referencia), 8, color_centro, -1)
 
         # Centro de imagen fijo, incluso si falta uno de los limites.
         cv2.line(frame, (width // 2, y1), (width // 2, y2), (255, 0, 0), 2)
@@ -322,11 +402,13 @@ try:
                 mensaje = "Error al guardar. Revisa terminal y pulsa S otra vez."
                 print(f"No se guardo el JSON: {exc}")
             else:
+                seguimiento.reiniciar()
                 calibrando = False
                 cv2.destroyWindow(window_detection_name)
                 mensaje = "HSV guardado. R recalibrar / Q salir"
         elif key in (ord("r"), ord("R")) and not calibrando:
             cv2.destroyWindow("Mascara amarilla")
+            seguimiento.reiniciar()
             crear_sliders()
             calibrando = True
             mensaje = "Calibrando amarillo: S guardar"
