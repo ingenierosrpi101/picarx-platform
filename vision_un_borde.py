@@ -15,7 +15,7 @@ BORDE = "izquierdo"
 
 # Conservamos la ROI de tu archivo anterior.
 ROI_Y_INICIO = 0.15
-ROI_Y_FIN = 0.30
+ROI_Y_FIN = 0.45
 
 AREA_MINIMA = 100
 TOLERANCIA = 70
