@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from vilib import Vilib
 
-haar = cv2.CascadeClassifier('character.xml')
+haar = cv2.CascadeClassifier('pedestrian_cascade.xml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 # CascadeClassifier no lanza error si el archivo no existe; hay que revisarlo
