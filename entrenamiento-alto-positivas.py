@@ -4,7 +4,7 @@ import numpy as np
 from vilib import Vilib
 
 Datos = 'p - alto'
-x1, y1 = 190, 80
+x1, y1 = 230, 80
 x2, y2 = 500, 360
 FUENTE = cv2.FONT_HERSHEY_SIMPLEX
 
