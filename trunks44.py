@@ -40,7 +40,7 @@ try:
             continue
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        prueba = haar.detectMultiScale(gray, 1.3, 3, 2)
+        prueba = haar.detectMultiScale(gray, 1.3, 1, 2)
 
         for (x, y, w, h) in prueba:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
