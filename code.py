@@ -5,7 +5,7 @@ from vilib import Vilib
 
 Datos = 'p'
 x1, y1 = 190, 80
-x2, y2 = 450, 398
+x2, y2 = 430, 430
 FUENTE = cv2.FONT_HERSHEY_SIMPLEX
 
 if not os.path.exists(Datos):
