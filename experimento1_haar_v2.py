@@ -38,7 +38,7 @@ ANCHO_MIN_ALTO = 100             # EJEMPLO: calibrar; no son centimetros.
 PASO_UMBRAL = 5                  # Teclas +/-; pixeles del frame procesado.
 HAAR_POR_MODO = {
     1: {"scaleFactor": 1.1, "minNeighbors": 3},
-    2: {"scaleFactor": 1.1, "minNeighbors": 3},
+    2: {"scaleFactor": 1.07, "minNeighbors": 3},
 }
 # Conservar aqui los parametros que funcionaron con CADA modelo.
 # ---------- VARIABLES DEL PROGRAMA ----------
