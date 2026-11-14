@@ -1,9 +1,3 @@
-"""PiCar-X - Experimento 1. Ejecutar este archivo desde el editor de Python.
-Poner los dos XML en la misma carpeta que este archivo.
-Teclas en la ventana de video: 1 alto, 2 peaton, W avanzar,
-ESPACIO o D parar, Q o ESC salir. Al cambiar modo siempre se detiene.
-Usa Vilib + OpenCV. Cerrar otros programas que utilicen la camara.
-"""
 import time
 from pathlib import Path
 
@@ -12,8 +6,7 @@ import numpy as np
 from picarx import Picarx
 from vilib import Vilib
 
-# ---------- VALORES QUE PUEDEN AJUSTAR ----------
-POTENCIA = 15                 # Potencia de motores, NO velocidad en km/h.
+POTENCIA = 15                 # Potencia de motores
 CONFIRMACIONES = 3            # Tres imagenes nuevas seguidas con deteccion.
 TIEMPO_ALTO = 10.0
 TIEMPO_DESPEJADO = 2.0        # Peaton: esperar sin detecciones antes de avanzar.
@@ -43,7 +36,7 @@ px = Picarx()
 
 try:
     px.stop()
-    px.set_dir_servo_angle(0)  # Trayectoria recta; no es seguimiento de carril.
+    px.set_dir_servo_angle(0)  
 
     alto = cv2.CascadeClassifier(str(carpeta / 'stop_cascade.xml'))
     peaton = cv2.CascadeClassifier(str(carpeta / 'pedestrian_cascade.xml'))
@@ -51,7 +44,6 @@ try:
         raise RuntimeError('Falta un XML o no es valido. Coloca ambos junto al script.')
 
     Vilib.camera_start()
-    # La ventana la muestra OpenCV; no necesitamos transmision web de Vilib.
     cv2.namedWindow(ventana)
 
     while True:
@@ -61,8 +53,6 @@ try:
         nueva = valida and imagen is not imagen_anterior
 
         if nueva:
-            # Vilib publica cada captura en un array nuevo. Conservamos la referencia
-            # para no contar varias veces la misma imagen ni confundirla con una nueva.
             imagen_anterior = imagen
             ultima_imagen = ahora
             camara_lista = True
@@ -71,7 +61,7 @@ try:
             brillo = float(np.mean(gris))
             cajas = []
 
-            # 1. Imagen oscura: mide el promedio de intensidad de todos los pixeles.
+            # 1. Imagen oscura: Se mide el promedio de intensidad de todos los pixeles.
             if brillo < BRILLO_MINIMO:
                 if inicio_oscuro is None:
                     inicio_oscuro = ahora
@@ -137,8 +127,6 @@ try:
                 cv2.rectangle(video, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
         # 5. Si Vilib deja de entregar imagenes nuevas, el paro queda enclavado.
-        # Esto comprueba actualizacion de arrays, no que los pixeles cambien:
-        # una escena inmovil con camara funcionando NO debe causar un paro.
         if not valida or time.monotonic() - ultima_imagen > TIEMPO_SIN_IMAGEN:
             estado = 'PARO_SEGURO'
             motivo = 'Sin imagen nueva de camara'
@@ -169,7 +157,7 @@ try:
         cv2.imshow(ventana, pantalla)
         tecla = cv2.waitKey(10) & 0xFF
 
-        # 7. Teclado: cambiar modo SIEMPRE detiene el carrito.
+        # 7. Teclado
         if tecla in (ord('q'), ord('Q'), 27):
             break
         if cv2.getWindowProperty(ventana, cv2.WND_PROP_VISIBLE) < 1:
@@ -186,7 +174,6 @@ try:
             estado = 'PARO_SEGURO'
             motivo = 'Parada manual. Presiona W para reiniciar'
         elif tecla in (ord('w'), ord('W')):
-            # No permitir que W salte el alto ni la espera del peaton.
             if (estado == 'PARO_SEGURO' and modo != 0 and camara_lista
                     and brillo >= BRILLO_MINIMO
                     and time.monotonic() - ultima_imagen <= TIEMPO_SIN_IMAGEN):
@@ -197,7 +184,7 @@ try:
                 inicio_despejado = None
                 motivo = ''
 
-        # 8. Un solo lugar ordena avanzar. Todos los demas estados detienen.
+        # 8. Avance
         if estado == 'AVANCE':
             px.forward(POTENCIA)
         else:
@@ -206,7 +193,6 @@ try:
 except KeyboardInterrupt:
     print('Programa interrumpido.')
 finally:
-    # Si hay un error, Ctrl+C o salida normal, detener antes de cerrar la camara.
     px.stop()
     Vilib.camera_close()
     cv2.destroyAllWindows()

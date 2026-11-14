@@ -2,16 +2,14 @@ import cv2
 import numpy as np
 from vilib import Vilib
 
-haar = cv2.CascadeClassifier('character.xml')
+haar = cv2.CascadeClassifier('stop_signal_v2.xml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
-# CascadeClassifier no lanza error si el archivo no existe; hay que revisarlo
 if haar.empty():
-    raise FileNotFoundError("No se pudo cargar 'cascade.xml'. Revisa la ruta.")
+    raise FileNotFoundError("No se pudo cargar 'cascade.xml'.")
 
 
 def obtener_frame():
-    """Convierte Vilib.img (ListProxy) en un arreglo NumPy BGR, o None."""
     img = Vilib.img
     if img is None:
         return None
@@ -34,13 +32,12 @@ try:
         frame = obtener_frame()
 
         if frame is None:
-            # Aún no hay imagen: atender teclado y reintentar
             if cv2.waitKey(10) & 0xFF == ord('q'):
                 break
             continue
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        prueba = haar.detectMultiScale(gray, 1.07, 2, 0)
+        prueba = haar.detectMultiScale(gray, 1.05, 2, 0)
 
         for (x, y, w, h) in prueba:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
