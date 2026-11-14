@@ -4,8 +4,8 @@ import numpy as np
 from vilib import Vilib
 
 Datos = 'p - alto'
-x1, y1 = 190, 120
-x2, y2 = 500, 360
+x1, y1 = 215, 120
+x2, y2 = 460, 360
 FUENTE = cv2.FONT_HERSHEY_SIMPLEX
 
 if not os.path.exists(Datos):
