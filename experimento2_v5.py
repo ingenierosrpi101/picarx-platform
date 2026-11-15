@@ -21,7 +21,7 @@ ROI_Y_FIN = 0.55
 
 AREA_MINIMA = 100
 TOLERANCIA = 70  # Solo cambia el mensaje en pantalla.
-KP = 0.15        # Grados de giro por cada pixel de error.
+KP = 0.08        # Grados de giro por cada pixel de error.
 SIGNO_DIRECCION = 1  # Cambiar a -1 si corrige al lado contrario.
 ANGULO_MAX = 25.0
 VELOCIDAD = 15   # Potencia de los motores; no indica cm/s.
