@@ -26,7 +26,7 @@ ANGULO_MAX = 25.0
 VELOCIDAD = 10   # Potencia de los motores; no indica cm/s.
 TIEMPO_MAX_IMAGEN = 1.0
 
-# Teclas: S guardar HSV, C referencia, W avanzar, D/espacio parar,
+# Teclas: S guardar HSV, C reiniciar referencia, W avanzar, D/espacio parar,
 # T probar direccion sin avance, R recalibrar, Q/Esc salir.
 modo = "PARADO"
 angulo = 0.0
@@ -315,7 +315,7 @@ if not 0 <= ROI_Y_INICIO < ROI_Y_FIN <= 1:
     raise ValueError("Los limites de la ROI no son validos.")
 
 calibrando = not cargar_hsv()
-mensaje = "Ajusta HSV y pulsa S" if calibrando else "Centra el carrito y pulsa C"
+mensaje = "Ajusta HSV y pulsa S" if calibrando else "Referencia automatica: inicia con el carrito centrado"
 
 try:
     px = Picarx()
@@ -394,7 +394,7 @@ try:
         ):
             parar()
             referencia_borde = None
-            mensaje = "Cambio de ROI/resolucion: vuelve a pulsar C"
+            mensaje = "Cambio de ROI/resolucion: nueva referencia automatica"
 
         medidas_anteriores = medidas_actuales
 
@@ -449,10 +449,6 @@ try:
             elegido = elegir_borde(candidatos)
             decision = "CALIBRANDO HSV: pulsa S"
 
-        elif referencia_borde is None:
-            elegido = elegir_borde(candidatos)
-            decision = "Centra el carrito y pulsa C"
-
         else:
             elegido = elegir_borde(candidatos)
 
@@ -466,11 +462,19 @@ try:
                 # 5.5 ERROR RESPECTO AL BORDE GUARDADO
                 # --------------------------------------------
 
-                # Comparar la posicion actual con la guardada al pulsar C.
-                error = x_borde - referencia_borde
-                referencia_valida = True
+                # Guardar una sola vez la posicion inicial del borde.
+                if referencia_borde is None and imagen_actual:
+                    referencia_borde = x_borde
+                    mensaje = "Referencia lista | W avanzar | T probar | C reiniciar"
 
-                if error < -TOLERANCIA:
+                # Comparar con la posicion inicial; no cambiarla en cada imagen.
+                error = x_borde - referencia_borde if referencia_borde is not None else None
+                referencia_valida = error is not None
+
+                if error is None:
+                    decision = "Esperando imagen actual"
+
+                elif error < -TOLERANCIA:
                     decision = "Corregir hacia la IZQUIERDA"
 
                 elif error > TOLERANCIA:
@@ -538,16 +542,6 @@ try:
             (255, 0, 0),
             2,
         )
-
-        if referencia_borde is not None:
-            # Verde: posicion del borde guardada al pulsar C.
-            cv2.line(
-                imagen,
-                (round(referencia_borde), y1),
-                (round(referencia_borde), y2),
-                (0, 255, 0),
-                2,
-            )
 
         # ----------------------------------------------------
         # 5.7 FPS DEL CICLO
@@ -623,7 +617,7 @@ try:
         elif key in (ord("m"), ord("M")):
             if not ajustar_camara():
                 break
-            mensaje = "Camara ajustada: centra el carrito y pulsa C | M camara"
+            mensaje = "Camara ajustada: referencia automatica | M camara"
             inicio_fps = time.monotonic()
             contador_fps = 0
             continue
@@ -638,7 +632,7 @@ try:
                 mensaje = "D/espacio: parar | Q: salir"
             else:
                 parar()
-                mensaje = "Necesitas imagen y referencia validas: S y C"
+                mensaje = "Espera un contorno valido; termina HSV con S si estas calibrando"
 
         elif key in (ord("s"), ord("S")) and calibrando:
             try:
@@ -651,30 +645,12 @@ try:
             else:
                 calibrando = False
                 cv2.destroyWindow(VENTANA_HSV)
-                mensaje = "C: fijar referencia | R: HSV | Q: salir"
+                mensaje = "Referencia automatica | C reiniciar | R HSV | Q salir"
 
         elif key in (ord("c"), ord("C")) and not calibrando:
             parar()
             referencia_borde = None
-            if not imagen_actual:
-                mensaje = "Imagen sin cambios: revisa camara"
-                continue
-            indice = elegir_borde(candidatos)
-
-            if indice is None:
-                mensaje = "No hay borde valido para calibrar"
-                continue
-
-            x_calibracion = candidatos[indice][1]
-
-            referencia_borde = x_calibracion
-
-            mensaje = "C listo | T probar direccion | W avanzar | D parar"
-
-            print(
-                "Borde: contorno de mayor area\n"
-                f"Referencia del borde: {referencia_borde:.1f} px"
-            )
+            mensaje = "Referencia reiniciada: se guardara el primer contorno valido"
 
         elif key in (ord("r"), ord("R")) and not calibrando:
             parar()
