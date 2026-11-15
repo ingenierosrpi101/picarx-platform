@@ -1,0 +1,24 @@
+[1mdiff --git a/deteccion_personaje.py b/deteccion_personaje.py[m
+[1mindex 88bf2f5..fecfc1e 100644[m
+[1m--- a/deteccion_personaje.py[m
+[1m+++ b/deteccion_personaje.py[m
+[36m@@ -57,4 +57,4 @@[m [mfinally:[m
+     try:[m
+         cv2.destroyAllWindows()[m
+     finally:[m
+[31m-        Vilib.camera_close()[m
+\ No newline at end of file[m
+[32m+[m[32m        Vilib.camera_close()[m
+[1mdiff --git a/experimento1_haar_v2.py b/experimento1_haar_v2.py[m
+[1mindex d736ebd..3431d96 100644[m
+[1m--- a/experimento1_haar_v2.py[m
+[1m+++ b/experimento1_haar_v2.py[m
+[36m@@ -118,7 +118,7 @@[m [mtry:[m
+     px.set_dir_servo_angle(0)  # Trayectoria recta; no es seguimiento de carril.[m
+ [m
+     alto = cv2.CascadeClassifier(str(carpeta / 'stop_cascade.xml'))[m
+[31m-    peaton = cv2.CascadeClassifier(str(carpeta / 'pedestrian_cascade.xml'))[m
+[32m+[m[32m    peaton = cv2.CascadeClassifier(str(carpeta / 'character.xml'))[m
+     if alto.empty() or peaton.empty():[m
+         raise RuntimeError('Falta un XML o no es valido. Coloca ambos junto al script.')[m
+ [m
