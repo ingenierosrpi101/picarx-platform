@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from vilib import Vilib
 
-haar = cv2.CascadeClassifier('stop_signal_v2.xml')
+haar = cv2.CascadeClassifier('stop_signal_v3.xml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 if haar.empty():
