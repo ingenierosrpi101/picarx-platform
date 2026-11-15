@@ -13,18 +13,18 @@ from vilib import Vilib
 # ============================================================
 
 # Buscar el borde solo desde la izquierda hasta el centro de la imagen.
-ROI_X_FIN = 0.50  # 0.50 = mitad; 0.60 permite ver un poco mas alla del centro.
+ROI_X_FIN = 0.65  # 0.50 = mitad; 0.60 permite ver un poco mas alla del centro.
 
 # Altura de la franja donde se busca el borde.
-ROI_Y_INICIO = 0.15
-ROI_Y_FIN = 0.45
+ROI_Y_INICIO = 0.10
+ROI_Y_FIN = 0.55
 
 AREA_MINIMA = 100
 TOLERANCIA = 70  # Solo cambia el mensaje en pantalla.
-KP = 0.08        # Grados de giro por cada pixel de error.
+KP = 0.1        # Grados de giro por cada pixel de error.
 SIGNO_DIRECCION = 1  # Cambiar a -1 si corrige al lado contrario.
 ANGULO_MAX = 25.0
-VELOCIDAD = 20   # Potencia de los motores; no indica cm/s.
+VELOCIDAD = 15   # Potencia de los motores; no indica cm/s.
 TIEMPO_MAX_IMAGEN = 1.0
 
 # Teclas: S guardar HSV, C referencia, W avanzar, D/espacio parar,
