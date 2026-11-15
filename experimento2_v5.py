@@ -13,7 +13,7 @@ from vilib import Vilib
 # ============================================================
 
 # Buscar el borde solo desde la izquierda hasta el centro de la imagen.
-ROI_X_FIN = 0.65  # 0.50 = mitad; 0.60 permite ver un poco mas alla del centro.
+ROI_X_FIN = 1  # 0.50 = mitad; 0.60 permite ver un poco mas alla del centro.
 
 # Altura de la franja donde se busca el borde.
 ROI_Y_INICIO = 0.10
