@@ -718,9 +718,9 @@ try:
             x_calibracion = candidatos[indice][1]
 
             # La referencia debe estar a la izquierda del centro de la imagen.
-            if x_calibracion >= centro_imagen:
-                mensaje = "Coloca el borde a la izquierda y pulsa C"
-                continue
+            #if x_calibracion >= centro_imagen:
+             #   mensaje = "Coloca el borde a la izquierda y pulsa C"
+              #  continue
 
             referencia_borde = x_calibracion
             x_anterior = x_calibracion
