@@ -17,7 +17,7 @@ from vilib import Vilib
 
 # ---------- VALORES QUE PUEDEN AJUSTAR ----------
 POTENCIA = 15                 # Potencia de motores, NO velocidad en km/h.
-CONFIRMACIONES = 3            # Tres imagenes nuevas seguidas con deteccion.
+CONFIRMACIONES = 1            # Tres imagenes nuevas seguidas con deteccion.
 TIEMPO_ALTO = 10.0
 TIEMPO_DESPEJADO = 2.0        # Peaton: esperar sin detecciones antes de avanzar.
 TIEMPO_REARME = 2.0           # Alto: desaparecer para habilitar otro alto.
