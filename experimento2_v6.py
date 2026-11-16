@@ -647,7 +647,7 @@ try:
                 print(exc)
 
             else:
-                #calibrando = False
+                calibrando = False
                 #cv2.destroyWindow(VENTANA_HSV)
                 mensaje = "Centra el carrito y pulsa C | R HSV | Q salir"
 
