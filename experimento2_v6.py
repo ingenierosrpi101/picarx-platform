@@ -605,6 +605,7 @@ try:
         )
 
         cv2.imshow(VENTANA_VIDEO, imagen)
+        cv2.imshow*("Mascara", mascara)
         # Mostrar la mascara junto a las barras mientras se ajusta el color.
         if calibrando:
             cv2.imshow(VENTANA_HSV, mascara)
@@ -648,7 +649,7 @@ try:
 
             else:
                 calibrando = False
-                #cv2.destroyWindow(VENTANA_HSV)
+                cv2.destroyWindow(VENTANA_HSV)
                 mensaje = "Centra el carrito y pulsa C | R HSV | Q salir"
 
         elif key in (ord("c"), ord("C")) and not calibrando:
