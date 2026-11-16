@@ -53,7 +53,6 @@ inicio_oscuro = None
 imagen_anterior = None
 ultima_imagen = time.monotonic()
 brillo = 0.0
-camara_lista = False
 cajas = []
 video = np.zeros((480, 640, 3), dtype=np.uint8)
 ventana = 'PiCar-X: 1 Alto / 2 Peaton'
@@ -92,11 +91,6 @@ def guardar_ajustes():
     temporal.replace(archivo_ajustes)
 
 
-def es_alto_cercano(cajas_detectadas, umbral):
-    # Un booleano por imagen, aunque haya muchos cuadros superpuestos.
-    return any(w >= umbral for x, y, w, h in cajas_detectadas)
-
-
 def aplicar_camara():
     global camara_estable_desde, contador, inicio_despejado, cajas, ancho_mayor
     px.stop()
@@ -133,11 +127,9 @@ try:
         nueva = valida and imagen is not imagen_anterior
 
         if nueva:
-            # Vilib publica cada captura en un array nuevo. Conservamos la referencia
-            # para no contar varias veces la misma imagen ni confundirla con una nueva.
+            # Procesar cada imagen nueva una sola vez.
             imagen_anterior = imagen
             ultima_imagen = ahora
-            camara_lista = True
             video = imagen.copy()
             gris = cv2.cvtColor(video, cv2.COLOR_BGR2GRAY)
             brillo = float(np.mean(gris))
@@ -162,57 +154,49 @@ try:
 
                 # 2. Elegir UNA cascada segun el modo seleccionado.
                 if modo == 1:
-                    cajas = alto.detectMultiScale(gris, flags=0, **HAAR_POR_MODO[1])
+                    cajas = alto.detectMultiScale(gris, **HAAR_POR_MODO[1])
                 elif modo == 2:
-                    cajas = peaton.detectMultiScale(gris, flags=0, **HAAR_POR_MODO[2])
+                    cajas = peaton.detectMultiScale(gris, **HAAR_POR_MODO[2])
 
                 detectado = len(cajas) > 0
                 ancho_mayor = max((int(w) for x, y, w, h in cajas), default=0)
                 # Detectar lejos NO activa el alto. Para rearmar usamos detectado,
                 # que incluye TODAS las senales, incluso las pequenas.
-                candidato = es_alto_cercano(cajas, ANCHO_MIN_ALTO) if modo == 1 else detectado
+                candidato = ancho_mayor >= ANCHO_MIN_ALTO if modo == 1 else detectado
                 if candidato:
                     contador = min(contador + 1, CONFIRMACIONES)
                 else:
                     contador = 0
                 confirmado = contador >= CONFIRMACIONES
 
-                # 3. MODO 1: detenerse 10 s y luego ignorar esa senal hasta que salga.
-                if modo == 1 and estado != 'PARO_SEGURO':
-                    if estado == 'ALTO_10S':
+                # Alto: parar 10 s. Peaton: parar hasta que deje de verse.
+                if estado != 'PARO_SEGURO':
+                    if modo == 1 and estado == 'ALTO_10S':
                         if ahora - inicio_alto >= TIEMPO_ALTO:
                             estado = 'AVANCE'
                             inicio_despejado = None
                             contador = 0
-                    elif not alto_habilitado:
+                    elif ((modo == 1 and not alto_habilitado)
+                          or (modo == 2 and estado == 'ESPERA_PEATON')):
+                        # Ambos modos esperan un tiempo sin detecciones.
+                        tiempo_espera = TIEMPO_REARME if modo == 1 else TIEMPO_DESPEJADO
                         if detectado:
                             inicio_despejado = None
                         elif inicio_despejado is None:
                             inicio_despejado = ahora
-                        elif ahora - inicio_despejado >= TIEMPO_REARME:
+                        elif ahora - inicio_despejado >= tiempo_espera:
                             alto_habilitado = True
-                            inicio_despejado = None
-                            contador = 0
-                    elif confirmado:
-                        estado = 'ALTO_10S'
-                        inicio_alto = ahora
-                        alto_habilitado = False
-                        inicio_despejado = None
-
-                # 4. MODO 2: esperar al peaton y confirmar 2 s sin detecciones.
-                elif modo == 2 and estado != 'PARO_SEGURO':
-                    if estado == 'AVANCE' and confirmado:
-                        estado = 'ESPERA_PEATON'
-                        inicio_despejado = None
-                    if estado == 'ESPERA_PEATON':
-                        if detectado:
-                            inicio_despejado = None
-                        elif inicio_despejado is None:
-                            inicio_despejado = ahora
-                        elif ahora - inicio_despejado >= TIEMPO_DESPEJADO:
                             estado = 'AVANCE'
                             inicio_despejado = None
                             contador = 0
+                    elif confirmado and estado == 'AVANCE':
+                        inicio_despejado = None
+                        if modo == 1:
+                            estado = 'ALTO_10S'
+                            inicio_alto = ahora
+                            alto_habilitado = False
+                        elif modo == 2:
+                            estado = 'ESPERA_PEATON'
 
             for x, y, w, h in cajas:
                 cerca = modo != 1 or w >= ANCHO_MIN_ALTO
@@ -222,18 +206,15 @@ try:
                 cv2.putText(video, etiqueta, (x, max(18, y-6)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-        # 5. Si Vilib deja de entregar imagenes nuevas, el paro queda enclavado.
-        # Esto comprueba actualizacion de arrays, no que los pixeles cambien:
-        # una escena inmovil con camara funcionando NO debe causar un paro.
+        # Parar si la camara deja de entregar imagenes nuevas.
         if not valida or time.monotonic() - ultima_imagen > TIEMPO_SIN_IMAGEN:
             estado = 'PARO_SEGURO'
             motivo = 'Sin imagen nueva de camara'
-            camara_lista = False
             contador = 0
             inicio_despejado = None
             inicio_oscuro = None
 
-        # 6. Mostrar estado, deteccion y brillo (para ajustar el umbral al tapar).
+        # Mostrar estado, deteccion y brillo (para ajustar el umbral al tapar).
         pantalla = video.copy()
         textos = [f'Modo: {modo} | Estado: {estado}',
                   f'Brillo: {brillo:.1f} | Limite oscuro: {BRILLO_MINIMO}',
@@ -261,66 +242,59 @@ try:
         if estado != 'AVANCE':
             px.stop()
         cv2.imshow(ventana, pantalla)
-        tecla = cv2.waitKey(10) & 0xFF
+        tecla = chr(cv2.waitKey(10) & 0xFF).lower()
 
-        # 7. Teclado: cambiar modo SIEMPRE detiene el carrito.
-        if tecla in (ord('q'), ord('Q'), 27):
+        # Teclado: cambiar modo SIEMPRE detiene el carrito.
+        if tecla in ('q', '\x1b'):
             break
         if cv2.getWindowProperty(ventana, cv2.WND_PROP_VISIBLE) < 1:
             break
-        if tecla in (ord('1'), ord('2')):
-            px.stop()
-            modo = 1 if tecla == ord('1') else 2
+        if tecla in ('1', '2'):
+            modo = int(tecla)
             estado = 'PARO_SEGURO'
             aplicar_camara()
             motivo = 'Modo seleccionado. Espera camara y presiona W'
-            contador = 0
             alto_habilitado = True
             inicio_alto = None
-            inicio_despejado = None
-        elif tecla in (ord('i'), ord('I'), ord('k'), ord('K'),
-                       ord('j'), ord('J'), ord('l'), ord('L')) and modo:
+        elif tecla in ('i', 'k', 'j', 'l') and modo:
             # Solo se permite calibrar desde paro/avance, nunca saltarse una espera.
             if estado in ('ALTO_10S', 'ESPERA_PEATON'):
                 aviso = 'Para ajustar camara, detente primero con ESPACIO'
             else:
-                px.stop()
                 estado = 'PARO_SEGURO'
-                letra = chr(tecla).lower()
-                eje = 'tilt' if letra in ('i', 'k') else 'pan'
-                cambio = PASO_CAMARA if letra in ('i', 'j') else -PASO_CAMARA
+                eje = 'tilt' if tecla in ('i', 'k') else 'pan'
+                cambio = PASO_CAMARA if tecla in ('i', 'j') else -PASO_CAMARA
                 CAMARA_POR_MODO[modo][eje] = max(-LIMITE_CAMARA, min(
                     LIMITE_CAMARA, CAMARA_POR_MODO[modo][eje] + cambio))
                 aplicar_camara()
                 motivo = 'Camara ajustada. Espera y presiona W'
                 aviso = 'Ajustes pendientes de guardar: S'
-        elif tecla in (ord('+'), ord('='), ord('-')) and modo == 1:
+        elif tecla in ('+', '=', '-') and modo == 1:
             if estado in ('ALTO_10S', 'ESPERA_PEATON'):
                 aviso = 'Para ajustar umbral, detente primero con ESPACIO'
             else:
                 px.stop()
                 estado = 'PARO_SEGURO'
-                cambio = -PASO_UMBRAL if tecla == ord('-') else PASO_UMBRAL
+                cambio = -PASO_UMBRAL if tecla == '-' else PASO_UMBRAL
                 ANCHO_MIN_ALTO = max(5, min(video.shape[1], ANCHO_MIN_ALTO + cambio))
                 contador = 0
                 inicio_despejado = None
                 motivo = 'Umbral ajustado. Presiona W'
                 aviso = 'Ajustes pendientes de guardar: S'
-        elif tecla in (ord('s'), ord('S')):
+        elif tecla == 's':
             try:
                 guardar_ajustes()
                 aviso = 'Camara de ambos modos y umbral guardados'
             except OSError as error:
                 aviso = 'No se pudieron guardar los ajustes (ver consola)'
                 print(error)
-        elif tecla in (32, ord('d'), ord('D')):
+        elif tecla in (' ', 'd'):
             estado = 'PARO_SEGURO'
             motivo = 'Parada manual. Presiona W para reiniciar'
-        elif tecla in (ord('w'), ord('W')):
+        elif tecla == 'w':
             # No permitir que W salte el alto ni la espera del peaton.
-            if (estado == 'PARO_SEGURO' and modo != 0 and camara_lista
+            if (estado == 'PARO_SEGURO' and modo != 0 and valida
                     and brillo >= BRILLO_MINIMO
-                    and time.monotonic() >= camara_estable_desde
                     and ultima_imagen >= camara_estable_desde
                     and time.monotonic() - ultima_imagen <= TIEMPO_SIN_IMAGEN):
                 estado = 'AVANCE'
@@ -330,7 +304,7 @@ try:
                 inicio_despejado = None
                 motivo = ''
 
-        # 8. Un solo lugar ordena avanzar. Todos los demas estados detienen.
+        # Un solo lugar ordena avanzar. Todos los demas estados detienen.
         if estado == 'AVANCE':
             px.forward(POTENCIA)
         else:
