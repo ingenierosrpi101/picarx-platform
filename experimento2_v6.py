@@ -128,7 +128,7 @@ def ajustar_camara():
             cv2.circle(vista, (w // 2, int(h * (ROI_Y_INICIO + ROI_Y_FIN) / 2)),
                        7, (255, 0, 0), -1)
             textos = [
-                "AJUSTE CAMARA - motores detenidos",
+                "AJUSTE CAMARA",
                 f"2: PAN {cam_pan:+.1f} | 3: TILT {cam_tilt:+.1f}",
                 f"Seleccion: {seleccionado} | W/D + | S/A - | paso {PASO_CAMARA}",
                 "0: ambos a cero | espacio: detener",
@@ -647,8 +647,8 @@ try:
                 print(exc)
 
             else:
-                calibrando = False
-                cv2.destroyWindow(VENTANA_HSV)
+                #calibrando = False
+                #cv2.destroyWindow(VENTANA_HSV)
                 mensaje = "Centra el carrito y pulsa C | R HSV | Q salir"
 
         elif key in (ord("c"), ord("C")) and not calibrando:
