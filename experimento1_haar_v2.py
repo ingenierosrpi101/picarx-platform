@@ -111,7 +111,7 @@ try:
     px.stop()
     px.set_dir_servo_angle(0)  # Trayectoria recta; no es seguimiento de carril.
 
-    alto = cv2.CascadeClassifier(str(carpeta / 'stop_cascade.xml'))
+    alto = cv2.CascadeClassifier(str(carpeta / 'stop_signal_v3.xml'))
     peaton = cv2.CascadeClassifier(str(carpeta / 'character.xml'))
     if alto.empty() or peaton.empty():
         raise RuntimeError('Falta un XML o no es valido. Coloca ambos junto al script.')
