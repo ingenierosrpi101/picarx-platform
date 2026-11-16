@@ -22,7 +22,7 @@ TIEMPO_ALTO = 10.0
 TIEMPO_DESPEJADO = 2.0        # Peaton: esperar sin detecciones antes de avanzar.
 TIEMPO_REARME = 2.0           # Alto: desaparecer para habilitar otro alto.
 BRILLO_MINIMO = 35            # Escala de grises: 0 negro, 255 blanco.
-TIEMPO_OSCURO = 0.5           # Oscuridad sostenida para ordenar paro seguro.
+TIEMPO_OSCURO = 0.1           # Oscuridad sostenida para ordenar paro seguro.
 TIEMPO_SIN_IMAGEN = 1.0
 
 # Camara: grados relativos al cero calibrado del PiCar-X.
@@ -37,8 +37,8 @@ TIEMPO_ASENTAR_CAMARA = 0.5
 ANCHO_MIN_ALTO = 100             # EJEMPLO: calibrar; no son centimetros.
 PASO_UMBRAL = 5                  # Teclas +/-; pixeles del frame procesado.
 HAAR_POR_MODO = {
-    1: {"scaleFactor": 1.1, "minNeighbors": 3},
-    2: {"scaleFactor": 1.07, "minNeighbors": 3},
+    1: {"scaleFactor": 1.3, "minNeighbors": 3},
+    2: {"scaleFactor": 1.3, "minNeighbors": 3},
 }
 # Conservar aqui los parametros que funcionaron con CADA modelo.
 # ---------- VARIABLES DEL PROGRAMA ----------
