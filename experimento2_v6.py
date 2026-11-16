@@ -26,7 +26,7 @@ ANGULO_MAX = 25.0
 VELOCIDAD = 10   # Potencia de los motores; no indica cm/s.
 TIEMPO_MAX_IMAGEN = 1.0
 
-# Teclas: S guardar HSV, C reiniciar referencia, W avanzar, D/espacio parar,
+# Teclas: S guardar HSV, C guardar referencia, W avanzar, D/espacio parar,
 # T probar direccion sin avance, R recalibrar, Q/Esc salir.
 modo = "PARADO"
 angulo = 0.0
@@ -36,7 +36,12 @@ ultimo_cambio_imagen = time.monotonic()
 
 
 def angulo_proporcional(error):
-    return max(-ANGULO_MAX, min(ANGULO_MAX, SIGNO_DIRECCION * KP * error))
+    giro = SIGNO_DIRECCION * KP * error
+    if giro > ANGULO_MAX:
+        giro = ANGULO_MAX
+    elif giro < -ANGULO_MAX:
+        giro = -ANGULO_MAX
+    return giro
 
 
 def parar():
@@ -120,7 +125,8 @@ def ajustar_camara():
             h, w = vista.shape[:2]
             cv2.rectangle(vista, (0, int(h * ROI_Y_INICIO)),
                           (int(w * ROI_X_FIN) - 1, int(h * ROI_Y_FIN)), (0, 255, 255), 2)
-            cv2.line(vista, (w // 2, 0), (w // 2, h - 1), (255, 0, 0), 1)
+            cv2.circle(vista, (w // 2, int(h * (ROI_Y_INICIO + ROI_Y_FIN) / 2)),
+                       7, (255, 0, 0), -1)
             textos = [
                 "AJUSTE CAMARA - motores detenidos",
                 f"2: PAN {cam_pan:+.1f} | 3: TILT {cam_tilt:+.1f}",
@@ -315,7 +321,7 @@ if not 0 <= ROI_Y_INICIO < ROI_Y_FIN <= 1:
     raise ValueError("Los limites de la ROI no son validos.")
 
 calibrando = not cargar_hsv()
-mensaje = "Ajusta HSV y pulsa S" if calibrando else "Referencia automatica: inicia con el carrito centrado"
+mensaje = "Ajusta HSV y pulsa S" if calibrando else "Centra el carrito y pulsa C"
 
 try:
     px = Picarx()
@@ -394,7 +400,7 @@ try:
         ):
             parar()
             referencia_borde = None
-            mensaje = "Cambio de ROI/resolucion: nueva referencia automatica"
+            mensaje = "Cambio de ROI/resolucion: centra el carrito y pulsa C"
 
         medidas_anteriores = medidas_actuales
 
@@ -445,43 +451,32 @@ try:
         # 5.4 ELEGIR UN SOLO BORDE
         # ----------------------------------------------------
 
+        # Elegir el contorno mas grande en cada imagen.
+        elegido = elegir_borde(candidatos)
+
         if calibrando:
-            elegido = elegir_borde(candidatos)
             decision = "CALIBRANDO HSV: pulsa S"
 
+        elif elegido is None:
+            decision = "Sin borde: detenido. Cuando vuelva, pulsa W o T"
+
+        elif referencia_borde is None:
+            decision = "Centra el carrito y pulsa C"
+
         else:
-            elegido = elegir_borde(candidatos)
+            # Posicion actual del centro del contorno.
+            x_borde = candidatos[elegido][1]
 
-            if elegido is None:
-                decision = "Sin borde: detenido. Cuando vuelva, pulsa W o T"
+            # Diferencia respecto a la posicion guardada con C.
+            error = x_borde - referencia_borde
+            referencia_valida = True
 
+            if error < -TOLERANCIA:
+                decision = "Borde a la izquierda de la referencia"
+            elif error > TOLERANCIA:
+                decision = "Borde a la derecha de la referencia"
             else:
-                x_borde = candidatos[elegido][1]
-
-                # --------------------------------------------
-                # 5.5 ERROR RESPECTO AL BORDE GUARDADO
-                # --------------------------------------------
-
-                # Guardar una sola vez la posicion inicial del borde.
-                if referencia_borde is None and imagen_actual:
-                    referencia_borde = x_borde
-                    mensaje = "Referencia lista | W avanzar | T probar | C reiniciar"
-
-                # Comparar con la posicion inicial; no cambiarla en cada imagen.
-                error = x_borde - referencia_borde if referencia_borde is not None else None
-                referencia_valida = error is not None
-
-                if error is None:
-                    decision = "Esperando imagen actual"
-
-                elif error < -TOLERANCIA:
-                    decision = "Corregir hacia la IZQUIERDA"
-
-                elif error > TOLERANCIA:
-                    decision = "Corregir hacia la DERECHA"
-
-                else:
-                    decision = "Dentro de tolerancia"
+                decision = "Dentro de tolerancia"
 
         # Calcular el giro con cada error. La tolerancia solo cambia el mensaje.
         if not referencia_valida or not imagen_actual:
@@ -534,14 +529,23 @@ try:
             2,
         )
 
-        # Azul: centro de la imagen.
-        cv2.line(
-            imagen,
-            (round(centro_imagen), y1),
-            (round(centro_imagen), y2),
-            (255, 0, 0),
-            2,
-        )
+        # Dibujar las referencias a media altura de la ROI.
+        y_puntos = (y1 + y2) // 2
+
+        # Azul: centro horizontal de la imagen; solo es una guia visual.
+        cv2.circle(imagen, (round(centro_imagen), y_puntos),
+                   7, (255, 0, 0), -1)
+
+        # Verde: posicion horizontal guardada al pulsar C.
+        if referencia_borde is not None:
+            cv2.circle(imagen, (round(referencia_borde), y_puntos),
+                       9, (0, 255, 0), 2)
+
+        # Repintar el centro elegido para que siga visible si coincide con otro punto.
+        if elegido is not None:
+            _, cx, cy = candidatos[elegido]
+            cv2.circle(imagen, (round(cx), round(cy)),
+                       5, (255, 0, 255), -1)
 
         # ----------------------------------------------------
         # 5.7 FPS DEL CICLO
@@ -617,7 +621,7 @@ try:
         elif key in (ord("m"), ord("M")):
             if not ajustar_camara():
                 break
-            mensaje = "Camara ajustada: referencia automatica | M camara"
+            mensaje = "Camara ajustada: centra el carrito y pulsa C | M camara"
             inicio_fps = time.monotonic()
             contador_fps = 0
             continue
@@ -632,7 +636,7 @@ try:
                 mensaje = "D/espacio: parar | Q: salir"
             else:
                 parar()
-                mensaje = "Espera un contorno valido; termina HSV con S si estas calibrando"
+                mensaje = "Termina HSV con S, centra el carrito y pulsa C"
 
         elif key in (ord("s"), ord("S")) and calibrando:
             try:
@@ -645,12 +649,18 @@ try:
             else:
                 calibrando = False
                 cv2.destroyWindow(VENTANA_HSV)
-                mensaje = "Referencia automatica | C reiniciar | R HSV | Q salir"
+                mensaje = "Centra el carrito y pulsa C | R HSV | Q salir"
 
         elif key in (ord("c"), ord("C")) and not calibrando:
             parar()
             referencia_borde = None
-            mensaje = "Referencia reiniciada: se guardara el primer contorno valido"
+            indice = elegir_borde(candidatos)
+            if indice is not None and imagen_actual:
+                referencia_borde = candidatos[indice][1]
+                mensaje = "Referencia guardada | W avanzar | T probar | D parar"
+                print("Posicion guardada:", referencia_borde)
+            else:
+                mensaje = "No hay contorno o imagen valida: vuelve a pulsar C"
 
         elif key in (ord("r"), ord("R")) and not calibrando:
             parar()
