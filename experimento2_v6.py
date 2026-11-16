@@ -605,7 +605,6 @@ try:
         )
 
         cv2.imshow(VENTANA_VIDEO, imagen)
-        cv2.imshow*("Mascara", mascara)
         # Mostrar la mascara junto a las barras mientras se ajusta el color.
         if calibrando:
             cv2.imshow(VENTANA_HSV, mascara)
@@ -670,6 +669,8 @@ try:
             calibrando = True
             crear_barras()
             mensaje = "Ajusta HSV y pulsa S"
+
+        cv2.imshow("Mascara", mascara)
 
 finally:
     try:
