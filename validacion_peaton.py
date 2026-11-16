@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from vilib import Vilib
 
-haar = cv2.CascadeClassifier('character.xml')
+haar = cv2.CascadeClassifier('pedestrian_cascade_v2.xml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 
@@ -43,7 +43,7 @@ try:
         for (x, y, w, h) in prueba:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
             cv2.rectangle(frame, (x, y), (x + 100, y + 40), (255, 0, 0), -1)
-            cv2.putText(frame, 'Trunks', (x + 10, y + 30), font, 0.7,
+            cv2.putText(frame, 'Peaton', (x + 10, y + 30), font, 0.7,
                         (255, 255, 255), 2)
 
         cv2.imshow('Video', frame)
