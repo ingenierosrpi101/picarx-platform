@@ -37,7 +37,7 @@ TIEMPO_ASENTAR_CAMARA = 0.5
 ANCHO_MIN_ALTO = 100             # EJEMPLO: calibrar; no son centimetros.
 PASO_UMBRAL = 5                  # Teclas +/-; pixeles del frame procesado.
 HAAR_POR_MODO = {
-    1: {"scaleFactor": 1.0, "minNeighbors": 3},
+    1: {"scaleFactor": 1.1, "minNeighbors": 4},
     2: {"scaleFactor": 1.07, "minNeighbors": 4},
 }
 # Conservar aqui los parametros que funcionaron con CADA modelo.
